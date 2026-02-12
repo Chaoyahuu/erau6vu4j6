@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <title>DECKMASTER PRO</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Preload fonts if possible, using standard fonts for now -->
+</head>
+
+<body ondrop="handleDrop(event)" ondragover="allowDrop(event)">
+  <!-- Global App Header -->
+  <div id="app-bar">
+    <div class="app-branding">
+      <div class="logo-icon">💠</div>
+      <div class="logo-text">DECKMASTER PRO <span class="version">V2.4.1</span></div>
+    </div>
+    <div class="app-status">
+      <span class="status-badge">≡ DB: ONLINE</span>
+      <span class="nav-item">SETTINGS</span>
+      <span class="nav-item">HELP</span>
+      <div class="user-avatar">👤</div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <!-- LEFT PANEL: Card Information (No Image) -->
+    <div class="panel left">
+      <div class="action-header">
+        <button id="btn-add" class="btn-action btn-add" onclick="if(selectedCard) addToCurrentDeck(selectedCard.id)">
+          + ADD
+        </button>
+        <button id="btn-remove" class="btn-action btn-remove"
+          onclick="if(selectedCard) removeFromDeck(selectedCard.id)">
+          - REMOVE
+        </button>
+      </div>
+
+      <div class="card-details-container">
+        <!-- Floating ID tag -->
+        <div class="card-id-badge" id="card-id">ID: ----</div>
+
+        <div class="card-header-block">
+          <h1 id="card-name">Select Card</h1>
+          <div id="card-shortname" class="card-subtext fa-fade"></div>
+        </div>
+
+        <div id="card-categories" class="tags-row"></div>
+
+        <div class="stats-panel">
+          <div class="stat-row">
+            <div class="stat-item lvl">
+              <span class="label">LEVEL</span>
+              <span class="value" id="card-level">-</span>
+            </div>
+            <div class="stat-item attr">
+              <span class="label">属性</span>
+              <span class="value" id="card-attr">-</span>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-item type">
+              <span class="label">種類</span>
+              <span class="value" id="card-type">-</span>
+            </div>
+            <div class="stat-item race">
+              <span class="label">種族</span>
+              <span class="value" id="card-race">-</span>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-item atk">
+              <span class="label">ATK</span>
+              <span class="value" id="card-atk">0</span>
+            </div>
+            <div class="stat-item def">
+              <span class="label">DEF</span>
+              <span class="value" id="card-def">0</span>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-item gender">
+              <span class="label">性別</span>
+              <span class="value" id="card-gender">-</span>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Hidden but preserved for logic -->
+        <div style="display:none;" id="card-release"></div>
+
+        <div class="description-block">
+          <div id="card-desc"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE PANEL: Deck Workspace -->
+    <div class="panel middle">
+      <div class="panel-header deck-header">
+        <div class="deck-title-group">
+          <div class="deck-icon">🗃️</div>
+          <div class="deck-meta">
+            <h2 id="deck-title">主デッキ</h2>
+            <span id="deck-count-badge" class="badge">(0 / 40)</span>
+          </div>
+        </div>
+        <div class="deck-tabs">
+          <button class="tab-btn active" id="tab-main" onclick="switchDeckTab('main')">MAIN</button>
+          <button class="tab-btn" id="tab-extra" onclick="switchDeckTab('extra')">EXTRA</button>
+        </div>
+      </div>
+
+      <div id="deck-list" class="deck-content-area">
+        <!-- Cards injected here -->
+        <div class="empty-placeholder">
+          <div class="icon">💾</div>
+          <div class="text">デッキは空です</div>
+          <div class="subtext">SELECT CARDS FROM THE DATABASE TO START BUILDING YOUR PROFESSIONAL DECK.</div>
+          <button class="btn-cta" onclick="autoGenerateStub()">AUTO-GENERATE</button>
+        </div>
+      </div>
+
+      <div class="deck-footer">
+        <button class="btn-footer" onclick="clearCurrentDeck()">CLEAR ALL</button>
+        <button class="btn-footer primary" onclick="exportDeck()">SAVE DECK</button>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Database & Search -->
+    <div class="panel right">
+      <div class="panel-header db-header">
+        <div class="header-left">
+          <span class="folder-icon">📂</span>
+          <h2>カード一覧</h2>
+          <span id="result-count" class="count-badge">(6468)</span>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" onclick="importDeck()" title="Import">📤</button>
+          <button class="icon-btn" onclick="exportDeck()" title="Export">📥</button>
+          <button class="icon-btn" onclick="toggleFilter()" id="filter-toggle">▼ FILTER</button>
+          <button class="icon-btn" onclick="toggleSort()" id="sort-toggle">⇅ SORT</button>
+          <button class="icon-btn" onclick="resetFilters(); resetSearch()" title="Reset">↻ RESET</button>
+        </div>
+      </div>
+
+      <div class="search-section">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-text" placeholder="Search by name, type, or attribute..."
+            oninput="handleSearch()">
+        </div>
+
+        <!-- Active Filter Tags -->
+        <div id="active-filters" class="active-filters-container"></div>
+
+        <!-- Filters floating or embedded -->
+        <div id="filter-panel" class="filter-panel collapsed">
+          <h3>FILTERS</h3>
+          <input type="text" id="filter-category" placeholder="Filter by Category...">
+          <div id="filters" class="filter-options"></div>
+          <!-- Sort options removed from here, moved to sort panel -->
+          <div class="filter-actions">
+            <button onclick="renderCardList()">APPLY</button>
+            <button onclick="resetFilters()">RESET</button>
+          </div>
+        </div>
+
+        <!-- Sort Panel -->
+        <div id="sort-panel" class="filter-panel collapsed">
+          <h3>SORTING</h3>
+          <div class="sort-buttons-container">
+            <button class="sort-btn active" id="sort-id" onclick="handleSort('id')">ID</button>
+            <button class="sort-btn" id="sort-atk" onclick="handleSort('atk')">ATK</button>
+            <button class="sort-btn" id="sort-def" onclick="handleSort('def')">DEF</button>
+            <button class="sort-btn" id="sort-release" onclick="handleSort('release')">DATE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search History (Optional, hidden by default or styled nicely) -->
+      <div id="search-history" class="search-chips"></div>
+
+      <div id="card-list" class="card-grid-view">
+        <!-- Card items -->
+      </div>
+
+      <div class="pagination-footer">
+        <button id="btn-prev" class="page-btn">‹</button>
+        <span id="page-info" class="page-info">PAGE 1 / 216</span>
+        <button id="btn-next" class="page-btn">›</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+  <script src="main.js"></script>
+  <script>
+    // Quick inline stub for new UI functionality
+    function clearCurrentDeck() {
+      if (!confirm('Clear current deck?')) return;
+      if (typeof currentDeckList === 'function') {
+        const list = currentDeckList();
+        list.length = 0; // Clear array
+        renderDeck();
+      }
+    }
+    function autoGenerateStub() {
+      alert('Auto-generate feature coming soon!');
+    }
+  </script>
+</body>
+
+</html>
