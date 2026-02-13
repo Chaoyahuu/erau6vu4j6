@@ -56,20 +56,20 @@ body {
 }
 
 .logo-icon {
-    font-size: 20px;
+    font-size: 1.4rem;
     margin-right: 8px;
     color: var(--primary-accent);
 }
 
 .logo-text {
     font-weight: 700;
-    font-size: 18px;
+    font-size: 1.1rem;
     letter-spacing: 1px;
     color: #fff;
 }
 
 .version {
-    font-size: 10px;
+    font-size: 0.6rem;
     color: var(--primary-accent);
     margin-left: 4px;
     opacity: 0.8;
@@ -84,7 +84,7 @@ body {
     display: flex;
     align-items: center;
     gap: 16px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-sub);
 }
 
@@ -136,7 +136,7 @@ body {
 
 .panel-header h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #fff;
@@ -167,7 +167,7 @@ body {
     border-radius: 4px;
     font-weight: bold;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.9rem;
     text-transform: uppercase;
     display: flex;
     align-items: center;
@@ -216,19 +216,19 @@ body {
     padding: 2px 6px;
     border-radius: 2px;
     font-family: monospace;
-    font-size: 11px;
+    font-size: 0.7rem;
     border: 1px solid #333;
 }
 
 .card-header-block h1 {
-    font-size: 20px;
+    font-size: 1.3rem;
     margin: 0 0 4px 0;
     line-height: 1.2;
     color: #fff;
 }
 
 .card-subtext {
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-sub);
 }
 
@@ -243,7 +243,7 @@ body {
     background: #252525;
     border: 1px solid #444;
     color: #aaa;
-    font-size: 10px;
+    font-size: 0.6rem;
     padding: 2px 8px;
     border-radius: 10px;
     cursor: pointer;
@@ -283,14 +283,14 @@ body {
 }
 
 .stat-item .label {
-    font-size: 9px;
+    font-size: 0.6rem;
     color: #666;
     text-transform: uppercase;
     margin-bottom: 2px;
 }
 
 .stat-item .value {
-    font-size: 13px;
+    font-size: 0.8rem;
     font-weight: 600;
     color: #eee;
     white-space: nowrap;
@@ -306,13 +306,13 @@ body {
 .stat-item.atk .value {
     color: #ff6b6b;
     font-family: monospace;
-    font-size: 14px;
+    font-size: 0.9rem;
 }
 
 .stat-item.def .value {
     color: #4ec9ff;
     font-family: monospace;
-    font-size: 14px;
+    font-size: 0.9rem;
 }
 
 /* .stat-item.type .value { color: #e0e0e0; } */
@@ -325,7 +325,7 @@ body {
     border-radius: 4px;
     border: 1px solid #333;
     min-height: 100px;
-    font-size: 13px;
+    font-size: 0.8rem;
     line-height: 1.5;
     color: #ccc;
     white-space: pre-wrap;
@@ -363,7 +363,7 @@ body {
 }
 
 .deck-icon {
-    font-size: 24px;
+    font-size: 1.5rem;
     opacity: 0.5;
 }
 
@@ -373,13 +373,13 @@ body {
 }
 
 .deck-meta h2 {
-    font-size: 14px;
+    font-size: 0.9rem;
     color: var(--primary-accent);
     margin: 0;
 }
 
 .deck-meta .badge {
-    font-size: 11px;
+    font-size: 0.7rem;
     color: #666;
 }
 
@@ -396,7 +396,7 @@ body {
     color: #888;
     padding: 4px 16px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.8rem;
     border-radius: 4px 4px 0 0;
 }
 
@@ -431,7 +431,7 @@ body {
     border: 1px solid #444;
     border-radius: 4px;
     padding: 8px;
-    font-size: 14px;
+    font-size: 0.9rem;
     cursor: grab;
     position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -462,7 +462,7 @@ body {
     color: var(--primary-accent);
     border-radius: 50%;
     padding: 2px 5px;
-    font-size: 12px;
+    font-size: 0.8rem;
     position: absolute;
     bottom: 2px;
     right: 2px;
@@ -481,18 +481,18 @@ body {
 }
 
 .empty-placeholder .icon {
-    font-size: 48px;
+    font-size: 3rem;
     margin-bottom: 16px;
     opacity: 0.2;
 }
 
 .empty-placeholder .text {
-    font-size: 18px;
+    font-size: 1.1rem;
     margin-bottom: 8px;
 }
 
 .empty-placeholder .subtext {
-    font-size: 11px;
+    font-size: 0.7rem;
     max-width: 200px;
     line-height: 1.4;
     opacity: 0.5;
@@ -505,7 +505,7 @@ body {
     color: var(--primary-accent);
     padding: 8px 16px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 0.7rem;
     letter-spacing: 1px;
 }
 
@@ -529,7 +529,7 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.8rem;
     flex: 1;
 }
 
@@ -552,7 +552,7 @@ body {
     padding: 8px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     transition: all 0.2s;
@@ -613,7 +613,7 @@ body {
 .count-badge {
     font-family: monospace;
     color: #666;
-    font-size: 12px;
+    font-size: 0.8rem;
 }
 
 .header-actions {
@@ -628,7 +628,7 @@ body {
     cursor: pointer;
     padding: 4px 8px;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 0.8rem;
 }
 
 .icon-btn:hover {
@@ -637,7 +637,7 @@ body {
 }
 
 #filter-toggle {
-    font-size: 11px;
+    font-size: 0.7rem;
     font-weight: bold;
     border: 1px solid #444;
 }
@@ -656,7 +656,9 @@ body {
     position: absolute;
     left: 10px;
     color: #666;
-    font-size: 14px;
+    font-size: 0.9rem;
+    width: 20px;
+    text-align: center;
 }
 
 #search-text {
@@ -668,7 +670,7 @@ body {
     /* indent for icon */
     border-radius: 4px;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 0.8rem;
 }
 
 #search-text:focus {
@@ -691,7 +693,7 @@ body {
     color: var(--primary-accent);
     padding: 2px 8px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 0.7rem;
     border: 1px solid #444;
     cursor: pointer;
     display: flex;
@@ -709,7 +711,7 @@ body {
     content: "×";
     /* Close icon */
     font-weight: bold;
-    font-size: 12px;
+    font-size: 0.8rem;
 }
 
 
@@ -753,25 +755,46 @@ body {
 
 .filter-panel h3 {
     margin: 0 0 10px 0;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: #888;
     border-bottom: 1px solid #444;
     padding-bottom: 4px;
+}
+
+.filter-input-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
 }
 
 #filter-category {
     background: #111;
     border: 1px solid #444;
     color: #fff;
-    padding: 4px;
-    width: 100%;
-    margin-bottom: 8px;
+    padding: 6px;
+    flex: 1;
+    border-radius: 4px;
+}
+
+#btn-filter-apply {
+    background: var(--primary-accent);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    padding: 0 12px;
+    font-weight: bold;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+#btn-filter-apply:hover {
+    background: var(--primary-hover);
 }
 
 .filter-options {
     max-height: 200px;
     overflow-y: auto;
-    font-size: 12px;
+    font-size: 0.8rem;
 }
 
 .filter-actions {
@@ -783,8 +806,18 @@ body {
 .filter-actions button {
     flex: 1;
     padding: 4px;
-    font-size: 11px;
+    font-size: 0.7rem;
     cursor: pointer;
+    background: #333;
+    border: 1px solid #444;
+    color: #ccc;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.filter-actions button:hover {
+    background: #444;
+    color: #fff;
 }
 
 /* Card Grid View (Right Panel) */
@@ -801,7 +834,7 @@ body {
 
 /* Reuse .card-item style but maybe smaller text for list? */
 #card-list .card-item {
-    font-size: 15px;
+    font-size: 0.9rem;
     padding: 4px;
     height: auto;
     min-height: 30px;
@@ -826,7 +859,7 @@ body {
     height: 30px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -845,7 +878,7 @@ body {
 }
 
 .page-info {
-    font-size: 13px;
+    font-size: 0.8rem;
     color: #888;
     font-family: or;
     font-weight: 600;

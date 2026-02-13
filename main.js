@@ -38,8 +38,24 @@ async function init() {
   const response = await fetch("cards.db");
   const buffer = await response.arrayBuffer();
   db = new SQL.Database(new Uint8Array(buffer));
+  loadDbVersion();
   loadCards();
   // renderSearchHistory(); // If we implement history UI
+}
+
+function loadDbVersion() {
+  try {
+    const res = db.exec("SELECT value FROM metadata WHERE key = 'version'");
+    if (res.length > 0 && res[0].values.length > 0) {
+      const ver = res[0].values[0][0];
+      const el = document.querySelector(".status-badge");
+      if (el) el.textContent = `≡ DB: v${ver}`;
+    }
+  } catch (e) {
+    console.log("Metadata version not found", e);
+    const el = document.querySelector(".status-badge");
+    if (el) el.textContent = "≡ DB: ONLINE";
+  }
 }
 
 function loadCards() {
@@ -120,7 +136,7 @@ function renderCardList(resetPage = true) {
     el.textContent = card.略称; // Short name
     // Color border or text based on type? Original: style.color. 
     // New design: card-item has border. Let's use border color or a small pip.
-    el.style.borderLeft = `3px solid ${typeColors[card.種類] || "#555"}`;
+    el.style.borderLeft = `0.3rem solid ${typeColors[card.種類] || "#555"}`;
 
     if (selectedCard?.id === card.id) el.classList.add("selected");
 
@@ -307,7 +323,7 @@ function renderDeck() {
     el.className = "card-item";
     el.draggable = true;
     el.textContent = card.名前;
-    el.style.borderLeft = `3px solid ${typeColors[card.種類] || "#fff"}`;
+    el.style.borderLeft = `0.3rem solid ${typeColors[card.種類] || "#fff"}`;
 
     if (selectedCard?.id === card.id) el.classList.add("selected");
 
@@ -505,6 +521,11 @@ function isSearchMatch(card, term) {
 }
 
 function handleSearch() {
+  const input = document.getElementById("search-text");
+  const icon = document.getElementById("search-icon-symbol");
+  if (input && icon) {
+    icon.textContent = input.value.trim() ? "▶" : "🔍";
+  }
   renderCardList();
 }
 
@@ -522,21 +543,21 @@ function renderFilterPanel() {
 
   for (let key in filters) {
     const group = document.createElement("div");
-    group.style.marginBottom = "8px";
+    group.style.marginBottom = "0.5rem";
 
     const title = document.createElement("div");
     title.textContent = key;
     title.style.color = "#888";
-    title.style.fontSize = "11px";
+    title.style.fontSize = "0.9rem";
     title.style.fontWeight = "bold";
-    title.style.marginBottom = "4px";
+    title.style.marginBottom = "0.25rm";
     group.appendChild(title);
 
     // Grid of checkboxes? Or just list.
     const container = document.createElement("div");
     container.style.display = "flex";
     container.style.flexWrap = "wrap";
-    container.style.gap = "8px";
+    container.style.gap = "0.5rem";
 
     filters[key]
       .filter(x => x !== null && x !== undefined)
@@ -545,7 +566,7 @@ function renderFilterPanel() {
         const label = document.createElement("label");
         label.style.display = "flex";
         label.style.alignItems = "center";
-        label.style.fontSize = "11px";
+        label.style.fontSize = "0.9rem";
         label.style.cursor = "pointer";
 
         const cb = document.createElement("input");
@@ -596,6 +617,8 @@ function resetFilters() {
 function resetSearch() {
   const s = document.getElementById("search-text");
   if (s) s.value = "";
+  const icon = document.getElementById("search-icon-symbol");
+  if (icon) icon.textContent = "🔍";
   searchTags = [];
   renderCardList();
 }
@@ -790,8 +813,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (val) {
           searchTags.push(val); // Add to tags
           searchInput.value = ""; // Clear input
+          const icon = document.getElementById("search-icon-symbol");
+          if (icon) icon.textContent = "🔍";
           renderCardList(); // Update
         }
+      }
+    });
+  }
+
+  const filterCat = document.getElementById("filter-category");
+  if (filterCat) {
+    filterCat.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        renderCardList();
       }
     });
   }

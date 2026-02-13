@@ -16,7 +16,7 @@
       <div class="logo-text">DECKMASTER PRO <span class="version">V2.4.1</span></div>
     </div>
     <div class="app-status">
-      <span class="status-badge">≡ DB: ONLINE</span>
+      <span class="status-badge">≡ DB: LOADING...</span>
       <span class="nav-item">SETTINGS</span>
       <span class="nav-item">HELP</span>
       <div class="user-avatar">👤</div>
@@ -150,7 +150,7 @@
 
       <div class="search-section">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon" id="search-icon-symbol">🔍</span>
           <input type="text" id="search-text" placeholder="Search by name, type, or attribute..."
             oninput="handleSearch()">
         </div>
@@ -161,11 +161,12 @@
         <!-- Filters floating or embedded -->
         <div id="filter-panel" class="filter-panel collapsed">
           <h3>FILTERS</h3>
-          <input type="text" id="filter-category" placeholder="Filter by Category...">
+          <div class="filter-input-row">
+            <input type="text" id="filter-category" placeholder="Category...">
+            <button id="btn-filter-apply" onclick="renderCardList()">APPLY</button>
+          </div>
           <div id="filters" class="filter-options"></div>
-          <!-- Sort options removed from here, moved to sort panel -->
           <div class="filter-actions">
-            <button onclick="renderCardList()">APPLY</button>
             <button onclick="resetFilters()">RESET</button>
           </div>
         </div>
