@@ -383,6 +383,16 @@ body {
     color: #666;
 }
 
+.deck-meta .badge.over-limit {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.deck-meta .badge.under-limit {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
 .deck-tabs {
     margin-top: 8px;
     display: flex;

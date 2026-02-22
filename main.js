@@ -293,9 +293,16 @@ function renderDeck() {
   if (title) title.textContent = currentDeckTab === "main" ? "主デッキ" : "EXデッキ";
 
   const countBadge = document.getElementById("deck-count-badge");
-  const limit = currentDeckTab === "main" ? 40 : 15;
-  if (countBadge) countBadge.textContent = `(${deck.length} / ${limit})`;
-
+  const limit = currentDeckTab === "main" ? 60 : 15;
+  if (countBadge) {
+    countBadge.textContent = `(${deck.length} / ${limit})`;
+    countBadge.classList.remove("over-limit", "under-limit");
+    if (currentDeckTab === "main" && deck.length < 30) {
+      countBadge.classList.add("under-limit");
+    } else if (deck.length > limit) {
+      countBadge.classList.add("over-limit");
+    }
+  }
   if (deck.length === 0) {
     // Show empty state (already in HTML default, but if we clear innerHTML we need to restore it or handle it)
     panel.innerHTML = `
@@ -641,9 +648,8 @@ function currentDeckList() {
 
 function canAddToCurrentDeck(card) {
   const deck = currentDeckList();
-  const limit = currentDeckTab === "main" ? 40 : 15;
-  if (deck.length >= limit) return false;
-
+  const limit = currentDeckTab === "main" ? 60 : 15;
+  // if (deck.length >= limit) return false; // 允許超過上限
   if (currentDeckTab === "main" && extraTypes.includes(card.種類)) return false;
   if (currentDeckTab === "extra" && !extraTypes.includes(card.種類)) return false;
 
@@ -737,9 +743,27 @@ function handleDrop(event) {
 // Import/Export
 function exportDeck() {
   const lines = [];
+  const mainDeckLimit = 60;
+  const extraDeckLimit = 15;
+  let errors = [];
+
+  if (mainDeckCards.length > mainDeckLimit) {
+    errors.push(`主牌組超過 ${mainDeckLimit} 張 (目前 ${mainDeckCards.length} 張)`);
+  }
+  if (mainDeckCards.length < 30) {
+    errors.push(`主牌組少於 30 張 (目前 ${mainDeckCards.length} 張)`);
+  }
+  if (extraDeckCards.length > extraDeckLimit) {
+    errors.push(`額外牌組超過 ${extraDeckLimit} 張 (目前 ${extraDeckCards.length} 張)`);
+  }
+
+  if (errors.length > 0) {
+    alert("存檔錯誤：\n" + errors.join("\n"));
+    return;
+  }
   const main = mainDeckCards.map(c => c.id);
   const extra = extraDeckCards.map(c => c.id);
-  for (let i = 0; i < 40; i++) lines.push(main[i] || -1);
+  for (let i = 0; i < 60; i++) lines.push(main[i] || -1);
   for (let i = 0; i < 5; i++) lines.push("");
   for (let i = 0; i < 15; i++) lines.push(extra[i] || -1);
 
@@ -763,9 +787,9 @@ function importDeck() {
     reader.onload = () => {
       const lines = reader.result.split(/\r?\n/);
       // Basic parsing as per original
-      const mainIds = lines.slice(0, 40).filter(id => id && id != "-1");
+      const mainIds = lines.slice(0, 60).filter(id => id && id != "-1");
       // Extra starts at line 45 (index 45)
-      const extraIds = lines.slice(45, 60).filter(id => id && id != "-1");
+      const extraIds = lines.slice(65, 80).filter(id => id && id != "-1");
 
       mainDeckCards = mainIds.map(id => allCards.find(c => String(c.id) == String(id))).filter(Boolean);
       extraDeckCards = extraIds.map(id => allCards.find(c => String(c.id) == String(id))).filter(Boolean);
