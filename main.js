@@ -11,6 +11,7 @@ const typeColors = {
 const extraTypes = ["融合", "シンクロ", "エクシーズ", "リンク", "超次元"];
 // Search history logic kept simple
 let searchHistory = [];
+let cardHistory = []; // Card view history
 let searchTags = []; // New: Search Tags
 
 // Sort State
@@ -106,6 +107,7 @@ function renderCardList(resetPage = true) {
   container.innerHTML = "";
   let filtered = applyFiltersAndSearch();
 
+  updateSearchHistory(); // Save history if tags present
   // Recalculate itemsPerPage to account for layout changes (e.g. active tags height)
   updateItemsPerPage();
 
@@ -230,6 +232,7 @@ function updateItemsPerPage() {
 function renderCardInfo() {
   const c = selectedCard;
   if (!c) return;
+  updateCardHistory(c);
 
   const set = (id, val) => {
     const el = document.getElementById(id);
@@ -239,13 +242,18 @@ function renderCardInfo() {
   set("card-id", `ID: ${c.id}`);
   set("card-name", c.名前 || "Unknown");
   set("card-shortname", c.略称 || "");
-  set("card-type", c.種類 || ""); // Now separate
+  let typeDisplay = c.種類 || "";
+  if (c.チューナー == 1) {
+    typeDisplay += " / チューナー";
+  }
+  set("card-type", typeDisplay);
   set("card-attr", attrIcons[c.属性] || c.属性 || "-"); // Use icons
   set("card-race", c.種族 || ""); // Now separate
   set("card-level", c.レベル || "");
   set("card-atk", c.攻撃力 === -1 ? "?" : c.攻撃力 ?? "0");
   set("card-def", c.守備力 === -1 ? "?" : c.守備力 ?? "0");
   set("card-gender", c.性別 || "");
+  set("card-tuner", c.チューナー == 1 ? "是" : "否");
   // Description
   const descHTML = (c.説明 || "")
     .replace(/「(.*?)」/g, (_, word) => {
@@ -365,18 +373,17 @@ function applyFiltersAndSearch() {
     属性: getChecked("filter-属性"),
     種族: getChecked("filter-種族"),
     レベル: getChecked("filter-レベル"),
-    性別: getChecked("filter-性別")
+    性別: getChecked("filter-性別"),
+    チューナー: getChecked("filter-チューナー")
   };
 
   const search = document.getElementById("search-text")?.value.trim();
-
-  // Use state variables instead of radio
-  // const sortOrder = ... (Removed)
 
   let result = allCards.filter(card => {
     for (let key in filters) {
       if (filters[key].length && !filters[key].includes(String(card[key]))) return false;
     }
+
     if (categoryText && !card.categories.some(c => c.includes(categoryText))) return false;
 
     // Check Input Text
@@ -481,7 +488,11 @@ function renderActiveFilters() {
     const val = cb.value;
     const tag = document.createElement("div");
     tag.className = "filter-tag";
-    tag.textContent = val;
+    if (cb.className.includes('filter-チューナー')) {
+      tag.textContent = `チューナー: ${val === '1' ? '是' : '否'}`;
+    } else {
+      tag.textContent = val;
+    }
     tag.onclick = () => {
       cb.checked = false;
       renderCardList();
@@ -513,6 +524,128 @@ function renderActiveFilters() {
     };
     container.appendChild(tag);
   });
+}
+
+function toggleHistory() {
+  const p = document.getElementById("history-panel");
+  if (p) {
+    const wasCollapsed = p.classList.contains("collapsed");
+    // Close others
+    document.getElementById("filter-panel")?.classList.add("collapsed");
+    document.getElementById("sort-panel")?.classList.add("collapsed");
+
+    if (wasCollapsed) {
+      renderHistoryPanel();
+      p.classList.remove("collapsed");
+    } else {
+      p.classList.add("collapsed");
+    }
+  }
+}
+
+function updateSearchHistory() {
+  if (searchTags.length === 0) return;
+
+  // Find if the exact same tag combination already exists.
+  const existingIndex = searchHistory.findIndex(historyTags => arraysEqual(historyTags, searchTags));
+
+  // If it exists, remove it from its old position.
+  if (existingIndex > -1) {
+    searchHistory.splice(existingIndex, 1);
+  }
+
+  // Add the new (or now-moved) search to the front.
+  searchHistory.unshift([...searchTags]);
+
+  // Limit the history to 5 entries.
+  if (searchHistory.length > 5) {
+    searchHistory.length = 5; // Truncate array
+  }
+
+  // If panel is open, refresh it
+  if (!document.getElementById("history-panel")?.classList.contains("collapsed")) {
+    renderHistoryPanel();
+  }
+}
+
+function updateCardHistory(card) {
+  if (!card) return;
+
+  // Find if the card already exists.
+  const existingIndex = cardHistory.findIndex(historyCard => historyCard.id === card.id);
+
+  // If it exists, remove it.
+  if (existingIndex > -1) {
+    cardHistory.splice(existingIndex, 1);
+  }
+
+  cardHistory.unshift(card);
+  if (cardHistory.length > 5) {
+    cardHistory.length = 5;
+  }
+
+  if (!document.getElementById("history-panel")?.classList.contains("collapsed")) {
+    renderHistoryPanel();
+  }
+}
+
+function renderHistoryPanel() {
+  // Render Searches
+  const searchContainer = document.getElementById("history-searches");
+  if (searchContainer) {
+    searchContainer.innerHTML = "";
+    searchHistory.forEach(tags => {
+      const historyItemDiv = document.createElement("div");
+      historyItemDiv.className = "history-item";
+      // Make it a flex container for tags
+      historyItemDiv.style.display = 'flex';
+      historyItemDiv.style.flexWrap = 'wrap';
+      historyItemDiv.style.gap = '4px';
+
+      historyItemDiv.onclick = () => {
+        searchTags = [...tags];
+        renderCardList();
+        // Close panel after applying for better UX
+        document.getElementById("history-panel")?.classList.add("collapsed");
+      };
+
+      tags.forEach(tagText => {
+        const tagEl = document.createElement("div");
+        tagEl.className = "filter-tag search-tag";
+        tagEl.textContent = tagText;
+        historyItemDiv.appendChild(tagEl);
+      });
+
+      searchContainer.appendChild(historyItemDiv);
+    });
+  }
+
+  // Render Cards
+  const cardContainer = document.getElementById("history-cards");
+  if (cardContainer) {
+    cardContainer.innerHTML = "";
+    cardHistory.forEach(card => {
+      const div = document.createElement("div");
+      div.className = "history-item";
+      div.textContent = `[${card.id}] ${card.名前}`;
+      div.onclick = () => {
+        selectedCard = card;
+        renderCardInfo();
+        // Note: Do not close panel here, user may want to browse recent cards
+      };
+      cardContainer.appendChild(div);
+    });
+  }
+}
+
+function arraysEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; ++i) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 // Helper for search matching
@@ -590,6 +723,43 @@ function renderFilterPanel() {
     group.appendChild(container);
     filterDiv.appendChild(group);
   }
+
+  // Manually add Tuner filter group
+  const tunerGroup = document.createElement("div");
+  tunerGroup.style.marginBottom = "0.5rem";
+
+  const tunerTitle = document.createElement("div");
+  tunerTitle.textContent = "チューナー";
+  tunerTitle.style.color = "#888";
+  tunerTitle.style.fontSize = "0.9rem";
+  tunerTitle.style.fontWeight = "bold";
+  tunerTitle.style.marginBottom = "0.25rem";
+  tunerGroup.appendChild(tunerTitle);
+
+  const tunerContainer = document.createElement("div");
+  tunerContainer.style.display = "flex";
+  tunerContainer.style.flexWrap = "wrap";
+  tunerContainer.style.gap = "0.5rem";
+
+  [{ label: '是', value: '1' }, { label: '否', value: '0' }].forEach(opt => {
+    const label = document.createElement("label");
+    label.style.display = "flex";
+    label.style.alignItems = "center";
+    label.style.fontSize = "0.9rem";
+    label.style.cursor = "pointer";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = opt.value;
+    cb.className = `filter-チューナー`;
+    cb.onchange = renderCardList;
+
+    label.appendChild(cb);
+    label.append(` ${opt.label}`);
+    tunerContainer.appendChild(label);
+  });
+  tunerGroup.appendChild(tunerContainer);
+  filterDiv.appendChild(tunerGroup);
 }
 
 function getChecked(cls) {
@@ -602,6 +772,7 @@ function toggleFilter() {
     p.classList.toggle("collapsed");
     // Close sort if open
     document.getElementById("sort-panel")?.classList.add("collapsed");
+    document.getElementById("history-panel")?.classList.add("collapsed");
   }
 }
 
@@ -611,6 +782,7 @@ function toggleSort() {
     p.classList.toggle("collapsed");
     // Close filter if open
     document.getElementById("filter-panel")?.classList.add("collapsed");
+    document.getElementById("history-panel")?.classList.add("collapsed");
   }
 }
 
@@ -806,8 +978,10 @@ function importDeck() {
 document.addEventListener("mousedown", (event) => {
   const filterPanel = document.getElementById("filter-panel");
   const sortPanel = document.getElementById("sort-panel");
+  const historyPanel = document.getElementById("history-panel");
   const filterBtn = document.getElementById("filter-toggle");
   const sortBtn = document.getElementById("sort-toggle");
+  const historyBtn = document.getElementById("history-toggle");
 
   // Close Filter
   if (filterPanel && !filterPanel.classList.contains("collapsed")) {
@@ -819,6 +993,12 @@ document.addEventListener("mousedown", (event) => {
   if (sortPanel && !sortPanel.classList.contains("collapsed")) {
     if (!sortPanel.contains(event.target) && event.target !== sortBtn) {
       sortPanel.classList.add("collapsed");
+    }
+  }
+  // Close History
+  if (historyPanel && !historyPanel.classList.contains("collapsed")) {
+    if (!historyPanel.contains(event.target) && event.target !== historyBtn) {
+      historyPanel.classList.add("collapsed");
     }
   }
 });

@@ -830,6 +830,41 @@ body {
     color: #fff;
 }
 
+/* History Panel Specifics */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.history-item {
+    background: #333;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border: 1px solid #444;
+    transition: background 0.2s;
+}
+
+.history-item:hover {
+    background: #444;
+    border-color: var(--primary-accent);
+}
+
+/* In history panel, tags are for display only, not individually removable */
+.history-item .filter-tag {
+    cursor: inherit;
+    /* The whole row is clickable, not the tag */
+}
+
+.history-item .filter-tag::after {
+    content: none;
+    /* Hide the 'x' */
+}
+
 /* Card Grid View (Right Panel) */
 .card-grid-view {
     flex: 1;

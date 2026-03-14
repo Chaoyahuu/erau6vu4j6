@@ -144,6 +144,7 @@
           <button class="icon-btn" onclick="exportDeck()" title="Export">📥</button>
           <button class="icon-btn" onclick="toggleFilter()" id="filter-toggle">▼ FILTER</button>
           <button class="icon-btn" onclick="toggleSort()" id="sort-toggle">⇅ SORT</button>
+          <button class="icon-btn" onclick="toggleHistory()" id="history-toggle">🕒 HISTORY</button>
           <button class="icon-btn" onclick="resetFilters(); resetSearch()" title="Reset">↻ RESET</button>
         </div>
       </div>
@@ -180,6 +181,14 @@
             <button class="sort-btn" id="sort-def" onclick="handleSort('def')">DEF</button>
             <button class="sort-btn" id="sort-release" onclick="handleSort('release')">DATE</button>
           </div>
+        </div>
+
+        <!-- History Panel -->
+        <div id="history-panel" class="filter-panel collapsed">
+          <h3>RECENT SEARCHES</h3>
+          <div id="history-searches" class="history-list"></div>
+          <h3 style="margin-top: 10px; border-top: 1px solid #444; padding-top: 8px;">RECENT CARDS</h3>
+          <div id="history-cards" class="history-list"></div>
         </div>
       </div>
 
