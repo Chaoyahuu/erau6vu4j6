@@ -19,13 +19,13 @@ let currentSortKey = 'id';
 let currentSortDir = 1;
 
 const attrIcons = {
-  "光": "🌞 光",
-  "闇": "🌑 闇",
-  "地": "⛰️ 地",
-  "水": "💧 水",
-  "炎": "🔥 炎",
-  "風": "🌬️ 風",
-  "神": "⚡ 神"
+  "光属性": "光",
+  "闇属性": "闇",
+  "地属性": "地",
+  "水属性": "水",
+  "炎属性": "炎",
+  "風属性": "風",
+  "神属性": "神"
 };
 
 // 分頁狀態
@@ -272,7 +272,7 @@ function renderCardInfo() {
       const btn = document.createElement("button");
       btn.textContent = cat;
       btn.onclick = () => {
-        searchTags.push(cat);
+        searchTags = [cat];
         renderCardList();
       };
       catContainer.appendChild(btn);
@@ -694,33 +694,73 @@ function renderFilterPanel() {
     group.appendChild(title);
 
     // Grid of checkboxes? Or just list.
-    const container = document.createElement("div");
-    container.style.display = "flex";
-    container.style.flexWrap = "wrap";
-    container.style.gap = "0.5rem";
+    if (key === "種類") {
+      const trapTypes = ["通常罠", "永続罠", "カウンター罠"];
+      const spellTypes = ["通常魔法", "永続魔法", "装備魔法", "儀式魔法", "フィールド", "速攻魔法"];
+      const otherTypes = filters[key].filter(type =>
+        type && !trapTypes.includes(type) && !spellTypes.includes(type)
+      );
 
-    filters[key]
-      .filter(x => x !== null && x !== undefined)
-      .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b), 'ja'))
-      .forEach(val => {
-        const label = document.createElement("label");
-        label.style.display = "flex";
-        label.style.alignItems = "center";
-        label.style.fontSize = "0.9rem";
-        label.style.cursor = "pointer";
+      const typeGroups = [trapTypes, spellTypes, otherTypes];
 
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.value = val;
-        cb.className = `filter-${key}`;
-        cb.onchange = renderCardList;
+      typeGroups.forEach((groupTypes, groupIndex) => {
+        const groupContainer = document.createElement("div");
+        groupContainer.style.display = "flex";
+        groupContainer.style.alignItems = "start";
+        groupContainer.style.marginBottom = "4px";
 
-        label.appendChild(cb);
-        label.append(` ${val}`);
-        container.appendChild(label);
+        // Add "All/None" checkbox
+        const allNoneLabel = document.createElement("label");
+        allNoneLabel.style.display = "flex";
+        allNoneLabel.style.marginRight = '8px';
+        allNoneLabel.style.alignItems = "center";
+        allNoneLabel.style.fontSize = "0.9rem";
+        allNoneLabel.style.cursor = "pointer";
+        allNoneLabel.style.whiteSpace = "nowrap";
+
+        const allNoneCheckbox = document.createElement("input");
+        allNoneCheckbox.type = "checkbox";
+        allNoneCheckbox.onchange = () => {
+          groupTypes.forEach(type => {
+            const checkbox = document.querySelector(`.filter-${key}[value="${type}"]`);
+            if (checkbox) checkbox.checked = allNoneCheckbox.checked;
+          });
+          renderCardList();
+        };
+        allNoneLabel.appendChild(allNoneCheckbox);
+
+        if (groupIndex === 0) allNoneLabel.append(" 罠全般");
+        else if (groupIndex === 1) allNoneLabel.append(" 魔法全般");
+        else allNoneLabel.style.display = 'none';
+
+        groupContainer.appendChild(allNoneLabel);
+
+        const checkboxContainer = document.createElement("div");
+        checkboxContainer.style.display = "flex";
+        checkboxContainer.style.flexWrap = "wrap";
+        checkboxContainer.style.gap = "0.2rem";
+
+        groupTypes.forEach(val => {
+          const label = createFilterCheckbox(key, val);
+          checkboxContainer.appendChild(label);
+        });
+
+        groupContainer.appendChild(checkboxContainer);
+        group.appendChild(groupContainer);
       });
+    } else {
+      const container = document.createElement("div");
+      container.style.display = "flex";
+      container.style.flexWrap = "wrap";
+      container.style.gap = "0.5rem";
 
-    group.appendChild(container);
+      filters[key]
+        .filter(x => x !== null && x !== undefined)
+        .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b), 'ja'))
+        .forEach(val => { if (val) { const label = createFilterCheckbox(key, val); container.appendChild(label); } });
+
+      group.appendChild(container);
+    }
     filterDiv.appendChild(group);
   }
 
@@ -761,6 +801,29 @@ function renderFilterPanel() {
   tunerGroup.appendChild(tunerContainer);
   filterDiv.appendChild(tunerGroup);
 }
+
+function createFilterCheckbox(key, val) {
+  const label = document.createElement("label");
+  label.style.display = "flex";
+  label.style.alignItems = "center";
+  label.style.fontSize = "0.9rem";
+  label.style.cursor = "pointer";
+
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.value = val;
+  cb.className = `filter-${key}`;
+  cb.onchange = renderCardList;
+
+  label.appendChild(cb);
+  label.append(` ${val}`);
+  return label;
+}
+
+
+
+
+
 
 function getChecked(cls) {
   return [...document.querySelectorAll(`.${cls}:checked`)].map(cb => cb.value);
