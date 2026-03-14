@@ -32,6 +32,16 @@ const attrIcons = {
 let currentPage = 1;
 let itemsPerPage = 60; // 預設值，之後會動態計算
 
+let favorites = new Set();
+let showFavoritesOnly = false;
+
+try {
+  const savedFavs = localStorage.getItem('ygo_favorites');
+  if (savedFavs) {
+    favorites = new Set(JSON.parse(savedFavs));
+  }
+} catch(e) {}
+
 init();
 
 async function init() {
@@ -234,6 +244,17 @@ function renderCardInfo() {
   if (!c) return;
   updateCardHistory(c);
 
+  const btnFav = document.getElementById("btn-favorite");
+  if (btnFav) {
+    if (favorites.has(c.id)) {
+      btnFav.textContent = "❤️";
+      btnFav.classList.add('active');
+    } else {
+      btnFav.textContent = "🤍";
+      btnFav.classList.remove('active');
+    }
+  }
+
   const set = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.textContent = val || "-";
@@ -395,6 +416,8 @@ function applyFiltersAndSearch() {
         if (!isSearchMatch(card, tag)) return false;
       }
     }
+
+    if (showFavoritesOnly && !favorites.has(card.id)) return false;
 
     return true;
   });
@@ -1127,3 +1150,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: false });
   }
 });
+
+function toggleFavorite(id) {
+  if (favorites.has(id)) {
+    favorites.delete(id);
+  } else {
+    favorites.add(id);
+  }
+  
+  localStorage.setItem('ygo_favorites', JSON.stringify([...favorites]));
+  
+  // Re-render card info to update heart icon immediately
+  renderCardInfo();
+  
+  // If the filter is currently active, re-render the list
+  if (showFavoritesOnly) {
+    renderCardList();
+  }
+}
+
+function toggleFavoriteFilter() {
+  showFavoritesOnly = !showFavoritesOnly;
+  
+  const btn = document.getElementById("favorite-filter-toggle");
+  if (btn) {
+    if (showFavoritesOnly) {
+      btn.textContent = "❤️";
+      btn.classList.add("active");
+    } else {
+      btn.textContent = "🤍";
+      btn.classList.remove("active");
+    }
+  }
+  
+  renderCardList();
+}

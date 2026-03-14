@@ -543,6 +543,18 @@ body {
     flex: 1;
 }
 
+#btn-clear { flex: 2; }
+#btn-save { flex: 1; }
+#btn-load { flex: 1; }
+
+.btn-favorite { background: #222; border: 1px solid #444; }
+.btn-favorite.active { color: #ff4081; }
+
+#favorite-filter-toggle.active {
+    color: #ff4081;
+    background: #444;
+}
+
 
 
 

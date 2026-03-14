@@ -27,6 +27,9 @@
     <!-- LEFT PANEL: Card Information (No Image) -->
     <div class="panel left">
       <div class="action-header">
+        <button id="btn-favorite" class="btn-action" style="flex: 0.5; font-size: 1.2rem; background: #222;" onclick="if(selectedCard) toggleFavorite(selectedCard.id)">
+          🤍
+        </button>
         <button id="btn-add" class="btn-action btn-add" onclick="if(selectedCard) addToCurrentDeck(selectedCard.id)">
           + ADD
         </button>
@@ -126,8 +129,9 @@
       </div>
 
       <div class="deck-footer">
-        <button class="btn-footer" onclick="clearCurrentDeck()">CLEAR ALL</button>
-        <button class="btn-footer primary" onclick="exportDeck()">SAVE DECK</button>
+        <button class="btn-footer" id="btn-clear" onclick="clearCurrentDeck()">CLEAR ALL</button>
+        <button class="btn-footer primary" id="btn-save" onclick="exportDeck()">SAVE</button>
+        <button class="btn-footer primary" id="btn-load" onclick="importDeck()">LOAD</button>
       </div>
     </div>
 
@@ -140,11 +144,10 @@
           <span id="result-count" class="count-badge">(6468)</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" onclick="importDeck()" title="Import">📤</button>
-          <button class="icon-btn" onclick="exportDeck()" title="Export">📥</button>
           <button class="icon-btn" onclick="toggleFilter()" id="filter-toggle">▼ FILTER</button>
           <button class="icon-btn" onclick="toggleSort()" id="sort-toggle">⇅ SORT</button>
           <button class="icon-btn" onclick="toggleHistory()" id="history-toggle">🕒 HISTORY</button>
+          <button class="icon-btn" onclick="toggleFavoriteFilter()" id="favorite-filter-toggle" title="Favorites">🤍</button>
           <button class="icon-btn" onclick="resetFilters(); resetSearch()" title="Reset">↻ RESET</button>
         </div>
       </div>
