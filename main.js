@@ -40,7 +40,7 @@ try {
   if (savedFavs) {
     favorites = new Set(JSON.parse(savedFavs));
   }
-} catch(e) {}
+} catch (e) { }
 
 init();
 
@@ -267,6 +267,9 @@ function renderCardInfo() {
   if (c.チューナー == 1) {
     typeDisplay += " / チューナー";
   }
+  if (c.分割) {
+    typeDisplay += ` / ${c.分割}`;
+  }
   set("card-type", typeDisplay);
   set("card-attr", attrIcons[c.属性] || c.属性 || "-"); // Use icons
   set("card-race", c.種族 || ""); // Now separate
@@ -276,7 +279,99 @@ function renderCardInfo() {
   set("card-gender", c.性別 || "");
   set("card-tuner", c.チューナー == 1 ? "是" : "否");
   // Description
+  const decorationMap = {
+    "ROGUE": [{ l: "RED", r: "RED", t: "ROGUE CARD" }],
+    "P_MAGIC": [
+      { l: "chocolate", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "chocolate", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "P_MAGIC_2": [{ l: "chocolate", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" }],
+    "BASM_P_MAGIC": [
+      { l: "wheat", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "wheat", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "BASM_P_MAGIC_2": [
+      { l: "wheat", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "wheat", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "GISK_P_MAGIC": [
+      { l: "DodgerBlue", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "DodgerBlue", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "GISK_P_MAGIC_2": [
+      { l: "DodgerBlue", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "DodgerBlue", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "FUSE_P_MAGIC": [
+      { l: "PURPLE", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "PURPLE", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "FUSE_P_MAGIC_2": [
+      { l: "PURPLE", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "PURPLE", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "SYN_P_MAGIC": [
+      { l: "WHITE", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "WHITE", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "SYN_P_MAGIC_2": [
+      { l: "WHITE", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "WHITE", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "XYZ_P_MAGIC": [
+      { l: "BLACK", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "BLACK", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "XYZ_P_MAGIC_2": [
+      { l: "BLACK", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "BLACK", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "LINK_P_MAGIC": [
+      { l: "DodgerBlue", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "DodgerBlue", r: "lightseagreen", t: "このカードは永続魔法扱いで発動できる" }
+    ],
+    "LINK_P_MAGIC_2": [
+      { l: "DodgerBlue", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "DodgerBlue", r: "lightseagreen", t: "モンスター効果" }
+    ],
+    "PSY_P_MAGIC": [
+      { l: "RED", r: "lightseagreen", t: "PENDULUM  MAGIC" },
+      { l: "RED", r: "lightseagreen", t: "このカードは永続魔法扱いで發動できる" }
+    ],
+    "PSY_P_MAGIC_2": [
+      { l: "RED", r: "lightseagreen", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" },
+      { l: "RED", r: "lightseagreen", t: "モンスター效果" }
+    ],
+    "MAXIMUM": [
+      { l: "GOLD", r: "GOLD", t: "【マキシマムモード】" },
+      { l: "GOLD", r: "GOLD", t: "すべてのパーツがそろっているマキシマムモンスターは完全耐性を持つ" }
+    ],
+    "D_HEART_W": [{ l: "GREEN", r: "GREEN", t: "DRAG-HEART WEAPON" }],
+    "D_HEART_F": [{ l: "RED", r: "RED", t: "DRAG-HEART FORT" }],
+    "D_HEART_2": [{ l: "RED", r: "RED", t: "このカードはフィールドから墓地へ送られる場合EXデッキへ行く" }],
+    "D_HEART_C": [{ l: "RED", r: "RED", t: "DRAG-HEART CREATURE" }],
+    "FORTRESS": [{ l: "RED", r: "RED", t: "F O R T R E S S" }],
+    "IMPACT!": [{ l: "GREEN", r: "GREEN", t: "FINISHER MOVE" }],
+    "CUSTOM": [{ l: "YELLOW", r: "YELLOW", t: "カスタム カード" }],
+    "INVASION": [{ l: "RED", r: "RED", t: "侵　略" }],
+    "FREV_CHANGE": [{ l: "GOLD", r: "GOLD", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE1": [{ l: "RED", r: "GREEN", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE2": [{ l: "YELLOW", r: "AQUA", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE3": [{ l: "YELLOW", r: "GREEN", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE4": [{ l: "DodgerBlue", r: "PURPLE", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE5": [{ l: "PURPLE", r: "RED", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE6": [{ l: "RED", r: "YELLOW", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE7": [{ l: "PURPLE", r: "GREEN", t: "革　命 チ ェ ン ジ" }],
+    "REV_CHANGE8": [{ l: "GREEN", r: "DodgerBlue", t: "革　命 チ ェ ン ジ" }]
+  };
+
   const descHTML = (c.説明 || "")
+    // 使用 \n? 吞掉標籤前後可能存在的換行，避免產生多餘的 <br>
+    .replace(/\n?\[DECORATION\](\w+)\n?/g, (match, key) => {
+      const items = decorationMap[key];
+      if (!items) return match;
+      return items.map(item => `<div class="decoration-container"><div class="decoration-line" style="background: ${item.l};"></div><div class="decoration-text" style="background-image: linear-gradient(to right, ${item.l}, ${item.r});">${item.t}</div><div class="decoration-line" style="background: ${item.r};"></div></div>`).join("");
+    })
     .replace(/「(.*?)」/g, (_, word) => {
       const encoded = encodeURIComponent(word);
       return `<a href="#" class="desc-link" data-word="${encoded}">「${word}」</a>`;
@@ -305,7 +400,7 @@ function renderCardInfo() {
     link.addEventListener("click", e => {
       e.preventDefault();
       const word = decodeURIComponent(e.currentTarget.dataset.word);
-      searchTags.push(word);
+      searchTags = [word];
       renderCardList();
     });
   });
@@ -395,7 +490,8 @@ function applyFiltersAndSearch() {
     種族: getChecked("filter-種族"),
     レベル: getChecked("filter-レベル"),
     性別: getChecked("filter-性別"),
-    チューナー: getChecked("filter-チューナー")
+    チューナー: getChecked("filter-チューナー"),
+    分割: getChecked("filter-分割")
   };
 
   const search = document.getElementById("search-text")?.value.trim();
@@ -698,7 +794,7 @@ function renderFilterPanel() {
   filterDiv.innerHTML = "";
 
   // Define what to filter
-  const filterKeys = ["種類", "属性", "種族", "レベル", "性別"];
+  const filterKeys = ["種類", "属性", "種族", "レベル", "性別", "分割"];
   const filters = {};
   filterKeys.forEach(k => {
     filters[k] = [...new Set(allCards.map(c => c[k]))];
@@ -1157,12 +1253,12 @@ function toggleFavorite(id) {
   } else {
     favorites.add(id);
   }
-  
+
   localStorage.setItem('ygo_favorites', JSON.stringify([...favorites]));
-  
+
   // Re-render card info to update heart icon immediately
   renderCardInfo();
-  
+
   // If the filter is currently active, re-render the list
   if (showFavoritesOnly) {
     renderCardList();
@@ -1171,7 +1267,7 @@ function toggleFavorite(id) {
 
 function toggleFavoriteFilter() {
   showFavoritesOnly = !showFavoritesOnly;
-  
+
   const btn = document.getElementById("favorite-filter-toggle");
   if (btn) {
     if (showFavoritesOnly) {
@@ -1182,6 +1278,6 @@ function toggleFavoriteFilter() {
       btn.classList.remove("active");
     }
   }
-  
+
   renderCardList();
 }

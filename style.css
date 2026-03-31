@@ -543,12 +543,26 @@ body {
     flex: 1;
 }
 
-#btn-clear { flex: 2; }
-#btn-save { flex: 1; }
-#btn-load { flex: 1; }
+#btn-clear {
+    flex: 2;
+}
 
-.btn-favorite { background: #222; border: 1px solid #444; }
-.btn-favorite.active { color: #ff4081; }
+#btn-save {
+    flex: 1;
+}
+
+#btn-load {
+    flex: 1;
+}
+
+.btn-favorite {
+    background: #222;
+    border: 1px solid #444;
+}
+
+.btn-favorite.active {
+    color: #ff4081;
+}
 
 #favorite-filter-toggle.active {
     color: #ff4081;
@@ -954,4 +968,32 @@ body {
 .desc-link:hover {
     color: #fff;
     border-bottom-style: solid;
+}
+
+/* Decoration Styles */
+.decoration-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    line-height: 1.5;
+    gap: 10px;
+    /* 文字與線條之間的間距 */
+}
+
+.decoration-line {
+    flex: 1;
+    height: 1px;
+    /* 模擬 — 的高度 */
+}
+
+.decoration-text {
+    font-weight: bold;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    display: inline-block;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 100%;
 }
