@@ -13,6 +13,10 @@ const extraTypes = ["融合", "シンクロ", "エクシーズ", "リンク", "�
 let searchHistory = [];
 let cardHistory = []; // Card view history
 let searchTags = []; // New: Search Tags
+const defaultSearchHistory = [["E.R.A"]];
+let selectionTagPopup = null;
+let pendingSelectionTagPayload = null;
+let selectionTagPopupAnchorRect = null;
 
 // Sort State
 let currentSortKey = 'id';
@@ -42,9 +46,7 @@ try {
   }
 } catch (e) { }
 
-init();
-
-async function init() {
+export async function init() {
   const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
   const response = await fetch("cards.db");
   const buffer = await response.arrayBuffer();
@@ -86,6 +88,7 @@ function loadCards() {
     }
   }
   allCards.sort((a, b) => Number(a.id) - Number(b.id));
+  ensureDefaultSearchHistory();
 
   // 初始化動態分頁數量
   updateItemsPerPage();
@@ -105,8 +108,620 @@ function loadCards() {
   }
 }
 
+function findCardById(cardId) {
+  return allCards.find(c => String(c.id) === String(cardId));
+}
 
-function renderCardList(resetPage = true) {
+function getElementCenter(el) {
+  const rect = el.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function getContainerCenter(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  return getElementCenter(el);
+}
+
+function toHalfWidth(text) {
+  return String(text || "").normalize("NFKC");
+}
+
+function escapeRegExp(text) {
+  return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripSelectionMultiplierSuffixes(text) {
+  return String(text || "").replace(/(?<![A-Za-z0-9])[x×]\s*\d+(?!\d)/gi, "");
+}
+
+function stripQuotedSelectionText(text) {
+  return String(text || "").replace(/「[^「」]*」/g, "");
+}
+
+function ensureSelectionTagPopup() {
+  if (selectionTagPopup) return selectionTagPopup;
+  const popup = document.createElement("div");
+  popup.id = "selection-tag-popup";
+  popup.className = "selection-tag-popup hidden";
+  popup.addEventListener("mousedown", (e) => e.preventDefault());
+  popup.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-kind]");
+    if (!target || !pendingSelectionTagPayload) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSelectionTagChip(target.dataset.kind, target.dataset.value);
+  });
+  document.body.appendChild(popup);
+  selectionTagPopup = popup;
+  return popup;
+}
+
+function hideSelectionTagPopup() {
+  pendingSelectionTagPayload = null;
+  selectionTagPopupAnchorRect = null;
+  if (!selectionTagPopup) return;
+  selectionTagPopup.classList.add("hidden");
+}
+
+function getNumericFilterValue(id) {
+  const input = document.getElementById(id);
+  if (!input) return null;
+  const value = toHalfWidth(input.value).trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setNumericFilterValue(id, value) {
+  const input = document.getElementById(id);
+  if (input) {
+    input.value = value === null || value === undefined ? "" : String(value);
+  }
+}
+
+function clearNumericFilters() {
+  ["filter-atk-min", "filter-atk-max", "filter-def-min", "filter-def-max"].forEach(id => {
+    setNumericFilterValue(id, "");
+  });
+}
+
+function getStatFilters() {
+  return {
+    atkMin: getNumericFilterValue("filter-atk-min"),
+    atkMax: getNumericFilterValue("filter-atk-max"),
+    defMin: getNumericFilterValue("filter-def-min"),
+    defMax: getNumericFilterValue("filter-def-max")
+  };
+}
+
+function cardMatchesStatRange(rawValue, min, max) {
+  if (min === null && max === null) return true;
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < 0) return false;
+  if (min !== null && value < min) return false;
+  if (max !== null && value > max) return false;
+  return true;
+}
+
+function formatStatFilterLabel(label, min, max) {
+  if (min !== null && max !== null) {
+    return min === max ? `${label}: ${min}` : `${label}: ${min}-${max}`;
+  }
+  if (min !== null) return `${label}: >= ${min}`;
+  if (max !== null) return `${label}: <= ${max}`;
+  return label;
+}
+
+function isSelectionTagPopupVisible() {
+  return !!selectionTagPopup && !selectionTagPopup.classList.contains("hidden");
+}
+
+function isStatFilterApplied(prefix, min, max) {
+  const current = getStatFilters();
+  return current[`${prefix}Min`] === min && current[`${prefix}Max`] === max;
+}
+
+function areLevelOptionsApplied(optionIds = []) {
+  if (!optionIds.length) return false;
+  return optionIds.every(id => {
+    const option = pendingSelectionTagPayload?.filterOptions.find(item => item.id === id)
+      || getSelectionFilterOptions().find(item => item.id === id);
+    return !!option?.checkbox?.checked;
+  });
+}
+
+function isSelectionPayloadFullyApplied(payload) {
+  if (!payload) return false;
+  const filtersApplied = payload.filterOptions.every(option => option.checkbox?.checked);
+  const atkApplied = (payload.statFilters.atkMin === null && payload.statFilters.atkMax === null)
+    || isStatFilterApplied("atk", payload.statFilters.atkMin, payload.statFilters.atkMax);
+  const defApplied = (payload.statFilters.defMin === null && payload.statFilters.defMax === null)
+    || isStatFilterApplied("def", payload.statFilters.defMin, payload.statFilters.defMax);
+  const searchApplied = payload.quotedSearchTags.every(tag => searchTags.includes(tag));
+  return filtersApplied && atkApplied && defApplied && searchApplied;
+}
+
+function renderSelectionTagPopupContent(payload) {
+  const popup = ensureSelectionTagPopup();
+  const levelRangeOptionIds = new Set((payload.levelRangeChips || []).flatMap(chip => chip.optionIds || []));
+  const allApplied = isSelectionPayloadFullyApplied(payload);
+  const chips = [
+    ...((payload.levelRangeChips || []).map(chip => `
+      <button type="button" class="selection-tag-chip${areLevelOptionsApplied(chip.optionIds) ? " active" : ""}" data-kind="level-range" data-value="${encodeURIComponent(JSON.stringify({ optionIds: chip.optionIds }))}">
+        ${chip.label}
+      </button>`)),
+    ...payload.filterOptions
+      .filter(option => !levelRangeOptionIds.has(option.id))
+      .map(option => `
+      <button type="button" class="selection-tag-chip${option.checkbox?.checked ? " active" : ""}" data-kind="filter" data-value="${encodeURIComponent(option.id)}">
+        ${option.displayLabel}
+      </button>`),
+    ...(payload.statFilters.atkMin !== null || payload.statFilters.atkMax !== null
+      ? [`
+      <button type="button" class="selection-tag-chip${isStatFilterApplied("atk", payload.statFilters.atkMin, payload.statFilters.atkMax) ? " active" : ""}" data-kind="stat" data-value="${encodeURIComponent(JSON.stringify({ prefix: "atk", min: payload.statFilters.atkMin, max: payload.statFilters.atkMax }))}">
+        ${formatStatFilterLabel("ATK", payload.statFilters.atkMin, payload.statFilters.atkMax)}
+      </button>`]
+      : []),
+    ...(payload.statFilters.defMin !== null || payload.statFilters.defMax !== null
+      ? [`
+      <button type="button" class="selection-tag-chip${isStatFilterApplied("def", payload.statFilters.defMin, payload.statFilters.defMax) ? " active" : ""}" data-kind="stat" data-value="${encodeURIComponent(JSON.stringify({ prefix: "def", min: payload.statFilters.defMin, max: payload.statFilters.defMax }))}">
+        ${formatStatFilterLabel("DEF", payload.statFilters.defMin, payload.statFilters.defMax)}
+      </button>`]
+      : []),
+    ...payload.quotedSearchTags.map(tag => `
+      <button type="button" class="selection-tag-chip quoted${searchTags.includes(tag) ? " active" : ""}" data-kind="search" data-value="${encodeURIComponent(tag)}">
+        ${tag}
+      </button>`)
+  ].join("");
+
+  popup.innerHTML = `
+    <span class="selection-tag-popup-side">
+      <span class="selection-tag-popup-label">候補</span>
+    </span>
+    <span class="selection-tag-popup-main">
+      <span class="selection-tag-popup-actions">
+        <button type="button" class="selection-tag-chip selection-tag-chip-batch${allApplied ? " active" : ""}" data-kind="apply-all">一括適用</button>
+        <button type="button" class="selection-tag-chip selection-tag-chip-batch" data-kind="clear-all">一括解除</button>
+      </span>
+      <span class="selection-tag-popup-chips">${chips}</span>
+    </span>
+  `;
+}
+
+function getSelectionFilterOptions() {
+  return [...document.querySelectorAll(".filter-panel input[type='checkbox'][class^='filter-']")]
+    .map(cb => {
+      const value = String(cb.value || "");
+      if (!value) return null;
+
+      const isTuner = cb.className.includes("filter-チューナー");
+      const isLevel = cb.className.includes("filter-レベル");
+      return {
+        id: `${cb.className}::${value}`,
+        value,
+        normalizedValue: toHalfWidth(value),
+        displayLabel: isTuner
+          ? `チューナー: ${value === "1" ? "是" : "否"}`
+          : isLevel
+            ? `レベル: ${value}`
+            : value,
+        checkbox: cb,
+        isTuner
+      };
+    })
+    .filter(Boolean);
+}
+
+function extractSelectionTagPayload(selectedText) {
+  const rawText = String(selectedText || "").trim();
+  if (!rawText) return null;
+
+  const normalizedText = toHalfWidth(rawText);
+  const normalizedTextForFilterMatch = stripQuotedSelectionText(normalizedText);
+  const normalizedTextForNumericMatch = stripSelectionMultiplierSuffixes(normalizedTextForFilterMatch);
+  const filterOptions = getSelectionFilterOptions();
+  const matchedFilterOptions = [];
+  const levelOptions = filterOptions.filter(option => option.checkbox.className.includes("filter-レベル"));
+  const levelRangeChips = [];
+  const statFilters = {
+    atkMin: null,
+    atkMax: null,
+    defMin: null,
+    defMax: null
+  };
+
+  const pushFilterOption = (option) => {
+    if (option && !matchedFilterOptions.some(item => item.id === option.id)) {
+      matchedFilterOptions.push(option);
+    }
+  };
+
+  const rangePatterns = [
+    { regex: /レベル\s*(\d+)\s*以下/g, predicate: (target) => (level) => level <= target, label: (target) => `レベル: <= ${target}` },
+    { regex: /レベル\s*(\d+)\s*以上/g, predicate: (target) => (level) => level >= target, label: (target) => `レベル: >= ${target}` },
+    { regex: /レベル\s*(\d+)\s*未満/g, predicate: (target) => (level) => level < target, label: (target) => `レベル: < ${target}` },
+    { regex: /レベル\s*(\d+)\s*超/g, predicate: (target) => (level) => level > target, label: (target) => `レベル: > ${target}` }
+  ];
+
+  rangePatterns.forEach(({ regex, predicate, label }) => {
+    let rangeMatch;
+    while ((rangeMatch = regex.exec(normalizedText)) !== null) {
+      const target = Number(rangeMatch[1]);
+      if (!Number.isNaN(target)) {
+        const matchedLevelOptions = levelOptions.filter(option => {
+          const level = Number(option.value);
+          return !Number.isNaN(level) && predicate(target)(level);
+        });
+        if (matchedLevelOptions.length) {
+          matchedLevelOptions.forEach(pushFilterOption);
+          levelRangeChips.push({
+            label: label(target),
+            optionIds: matchedLevelOptions.map(option => option.id)
+          });
+        }
+      }
+    }
+  });
+
+  const assignStatRange = (prefix, min, max) => {
+    if (min !== null) {
+      const key = `${prefix}Min`;
+      statFilters[key] = statFilters[key] === null ? min : Math.max(statFilters[key], min);
+    }
+    if (max !== null) {
+      const key = `${prefix}Max`;
+      statFilters[key] = statFilters[key] === null ? max : Math.min(statFilters[key], max);
+    }
+  };
+
+  const statPatterns = [
+    { regex: /攻撃力\s*(\d+)\s*の/g, apply: (value) => assignStatRange("atk", value, value) },
+    { regex: /攻撃力\s*(\d+)\s*以下/g, apply: (value) => assignStatRange("atk", null, value) },
+    { regex: /攻撃力\s*(\d+)\s*以上/g, apply: (value) => assignStatRange("atk", value, null) },
+    { regex: /攻撃力\s*(\d+)\s*未満/g, apply: (value) => assignStatRange("atk", null, value - 1) },
+    { regex: /攻撃力\s*(\d+)\s*超/g, apply: (value) => assignStatRange("atk", value + 1, null) },
+    { regex: /守備力\s*(\d+)\s*の/g, apply: (value) => assignStatRange("def", value, value) },
+    { regex: /守備力\s*(\d+)\s*以下/g, apply: (value) => assignStatRange("def", null, value) },
+    { regex: /守備力\s*(\d+)\s*以上/g, apply: (value) => assignStatRange("def", value, null) },
+    { regex: /守備力\s*(\d+)\s*未満/g, apply: (value) => assignStatRange("def", null, value - 1) },
+    { regex: /守備力\s*(\d+)\s*超/g, apply: (value) => assignStatRange("def", value + 1, null) }
+  ];
+
+  statPatterns.forEach(({ regex, apply }) => {
+    let statMatch;
+    while ((statMatch = regex.exec(normalizedText)) !== null) {
+      const value = Number(statMatch[1]);
+      if (!Number.isNaN(value)) {
+        apply(value);
+      }
+    }
+  });
+
+  filterOptions
+    .slice()
+    .sort((a, b) => b.normalizedValue.length - a.normalizedValue.length)
+    .forEach(option => {
+      const { normalizedValue, isTuner } = option;
+      if (!normalizedValue) return;
+      if (isTuner) return;
+      const isNumeric = /^\d+$/.test(normalizedValue);
+      const matched = isNumeric
+        ? new RegExp(`(?<!\\d)${escapeRegExp(normalizedValue)}(?!\\d|体|枚)`).test(normalizedTextForNumericMatch)
+        : normalizedTextForFilterMatch.includes(normalizedValue);
+      if (matched) {
+        pushFilterOption(option);
+      }
+    });
+
+  const attributeChars = ["光", "闇", "地", "水", "炎", "風", "神"];
+  attributeChars.forEach(char => {
+    if (!normalizedTextForFilterMatch.includes(char)) return;
+    if (char === "地" && normalizedTextForFilterMatch.includes("墓地")) return;
+    filterOptions.forEach(option => {
+      const { normalizedValue } = option;
+      if (normalizedValue === char || normalizedValue === `${char}属性`) {
+        pushFilterOption(option);
+      }
+    });
+  });
+
+  const hasTunerText = normalizedTextForFilterMatch.includes("チューナー");
+  const hasNonTunerText = /チューナー以外|非チューナー/.test(normalizedTextForFilterMatch);
+  if (hasNonTunerText) {
+    filterOptions.forEach(option => {
+      if (option.isTuner && option.value === "0") {
+        pushFilterOption(option);
+      }
+    });
+  } else if (hasTunerText) {
+    filterOptions.forEach(option => {
+      if (option.isTuner && option.value === "1") {
+        pushFilterOption(option);
+      }
+    });
+  }
+
+  const quotedSearchTags = [];
+  const quoteRegex = /「([^「」]+)」/g;
+  let match;
+  while ((match = quoteRegex.exec(rawText)) !== null) {
+    const quoted = match[1].trim();
+    if (quoted && !quotedSearchTags.includes(quoted)) {
+      quotedSearchTags.push(quoted);
+    }
+  }
+
+  const hasStatFilters = Object.values(statFilters).some(value => value !== null);
+  if (matchedFilterOptions.length === 0 && quotedSearchTags.length === 0 && !hasStatFilters && levelRangeChips.length === 0) return null;
+  return { filterOptions: matchedFilterOptions, quotedSearchTags, statFilters, levelRangeChips };
+}
+
+function renderSelectionTagPopup(payload, rect) {
+  const popup = ensureSelectionTagPopup();
+  pendingSelectionTagPayload = payload;
+  selectionTagPopupAnchorRect = rect;
+  renderSelectionTagPopupContent(payload);
+  popup.classList.remove("hidden");
+
+  const margin = 12;
+  const popupRect = popup.getBoundingClientRect();
+  let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+  let top = rect.bottom + 10;
+
+  if (left < margin) left = margin;
+  if (left + popupRect.width > window.innerWidth - margin) {
+    left = window.innerWidth - popupRect.width - margin;
+  }
+
+  if (top + popupRect.height > window.innerHeight - margin) {
+    top = rect.top - popupRect.height - 10;
+  }
+
+  if (top < margin) top = margin;
+
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
+}
+
+function refreshSelectionTagPopup() {
+  if (!pendingSelectionTagPayload || !isSelectionTagPopupVisible()) return;
+  renderSelectionTagPopupContent(pendingSelectionTagPayload);
+}
+
+function toggleSelectionTagChip(kind, encodedValue) {
+  if (!pendingSelectionTagPayload) return;
+
+  if (kind === "apply-all") {
+    applySelectionTagPayloadInternal(pendingSelectionTagPayload, { preservePopup: true, toggleOffIfApplied: true });
+    refreshSelectionTagPopup();
+    return;
+  } else if (kind === "clear-all") {
+    applySelectionTagPayloadInternal(pendingSelectionTagPayload, { preservePopup: true, clearOnly: true });
+    refreshSelectionTagPopup();
+    return;
+  } else if (kind === "filter") {
+    const targetId = decodeURIComponent(encodedValue || "");
+    const option = pendingSelectionTagPayload.filterOptions.find(item => item.id === targetId);
+    if (option?.checkbox) {
+      option.checkbox.checked = !option.checkbox.checked;
+    }
+  } else if (kind === "level-range") {
+    const payload = JSON.parse(decodeURIComponent(encodedValue || ""));
+    const shouldApply = !areLevelOptionsApplied(payload.optionIds);
+    payload.optionIds.forEach(optionId => {
+      const option = pendingSelectionTagPayload.filterOptions.find(item => item.id === optionId);
+      if (option?.checkbox) {
+        option.checkbox.checked = shouldApply;
+      }
+    });
+  } else if (kind === "stat") {
+    const payload = JSON.parse(decodeURIComponent(encodedValue || ""));
+    const isApplied = isStatFilterApplied(payload.prefix, payload.min, payload.max);
+    setNumericFilterValue(`filter-${payload.prefix}-min`, isApplied ? "" : payload.min);
+    setNumericFilterValue(`filter-${payload.prefix}-max`, isApplied ? "" : payload.max);
+  } else if (kind === "search") {
+    const tag = decodeURIComponent(encodedValue || "");
+    if (searchTags.includes(tag)) {
+      searchTags = searchTags.filter(item => item !== tag);
+    } else {
+      searchTags.push(tag);
+    }
+  }
+
+  renderCardList();
+  refreshSelectionTagPopup();
+}
+
+function applySelectionTagPayload(payload) {
+  applySelectionTagPayloadInternal(payload, {});
+}
+
+function applySelectionTagPayloadInternal(payload, options = {}) {
+  const { preservePopup = false, toggleOffIfApplied = false, clearOnly = false } = options;
+  const shouldRemove = clearOnly || (toggleOffIfApplied && isSelectionPayloadFullyApplied(payload));
+
+  if (shouldRemove) {
+    payload.filterOptions.forEach(option => {
+      if (option.checkbox) option.checkbox.checked = false;
+    });
+    if (payload.statFilters) {
+      if (payload.statFilters.atkMin !== null || payload.statFilters.atkMax !== null) {
+        setNumericFilterValue("filter-atk-min", "");
+        setNumericFilterValue("filter-atk-max", "");
+      }
+      if (payload.statFilters.defMin !== null || payload.statFilters.defMax !== null) {
+        setNumericFilterValue("filter-def-min", "");
+        setNumericFilterValue("filter-def-max", "");
+      }
+    }
+    searchTags = searchTags.filter(tag => !payload.quotedSearchTags.includes(tag));
+    renderCardList();
+    if (!preservePopup) {
+      hideSelectionTagPopup();
+      const selection = window.getSelection();
+      if (selection) selection.removeAllRanges();
+    }
+    return;
+  }
+
+  document.querySelectorAll(".filter-panel input[type='checkbox'][class^='filter-']").forEach(cb => {
+    cb.checked = false;
+  });
+  clearNumericFilters();
+  const categoryInput = document.getElementById("filter-category");
+  if (categoryInput) categoryInput.value = "";
+  const searchInput = document.getElementById("search-text");
+  if (searchInput) searchInput.value = "";
+  const searchIcon = document.getElementById("search-icon-symbol");
+  if (searchIcon) searchIcon.textContent = "🔍";
+  searchTags = [];
+
+  payload.filterOptions.forEach(option => {
+    if (option.checkbox) {
+      option.checkbox.checked = true;
+    }
+  });
+
+  if (payload.statFilters) {
+    setNumericFilterValue("filter-atk-min", payload.statFilters.atkMin);
+    setNumericFilterValue("filter-atk-max", payload.statFilters.atkMax);
+    setNumericFilterValue("filter-def-min", payload.statFilters.defMin);
+    setNumericFilterValue("filter-def-max", payload.statFilters.defMax);
+  }
+
+  payload.quotedSearchTags.forEach(tag => {
+    if (!searchTags.includes(tag)) {
+      searchTags.push(tag);
+    }
+  });
+
+  renderCardList();
+  if (!preservePopup) {
+    hideSelectionTagPopup();
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+  }
+}
+
+function handleDescriptionSelection() {
+  const descEl = document.getElementById("card-desc");
+  if (!descEl) return hideSelectionTagPopup();
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!isSelectionTagPopupVisible()) {
+      hideSelectionTagPopup();
+    }
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+  if (!anchorNode || !focusNode || !descEl.contains(anchorNode) || !descEl.contains(focusNode)) {
+    hideSelectionTagPopup();
+    return;
+  }
+
+  const selectedText = selection.toString().trim();
+  const payload = extractSelectionTagPayload(selectedText);
+  if (!payload) {
+    hideSelectionTagPopup();
+    return;
+  }
+
+  const rect = range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) {
+    hideSelectionTagPopup();
+    return;
+  }
+
+  renderSelectionTagPopup(payload, rect);
+}
+
+function setupDescriptionSelectionTagging() {
+  ensureSelectionTagPopup();
+
+  document.addEventListener("mouseup", () => {
+    requestAnimationFrame(handleDescriptionSelection);
+  });
+
+  document.addEventListener("keyup", () => {
+    requestAnimationFrame(handleDescriptionSelection);
+  });
+
+  document.addEventListener("scroll", hideSelectionTagPopup, true);
+  window.addEventListener("resize", hideSelectionTagPopup);
+
+  document.addEventListener("mousedown", (event) => {
+    if (selectionTagPopup?.contains(event.target)) return;
+    const descEl = document.getElementById("card-desc");
+    if (descEl?.contains(event.target)) return;
+    hideSelectionTagPopup();
+  });
+}
+
+function createFlyingCard(label, from, to) {
+  if (!from || !to) return;
+  const ghost = document.createElement("div");
+  ghost.className = "flying-card";
+  ghost.textContent = label || "";
+  ghost.style.left = `${from.x}px`;
+  ghost.style.top = `${from.y}px`;
+  ghost.style.transform = "translate(-50%, -50%) translate(0px, 0px) scale(1)";
+  ghost.style.opacity = "0.95";
+  document.body.appendChild(ghost);
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearTimeout(fallbackTimer);
+    ghost.remove();
+  };
+
+  const handleTransitionEnd = event => {
+    if (event.target !== ghost) return;
+    cleanup();
+  };
+
+  ghost.addEventListener("transitionend", handleTransitionEnd);
+
+  const fallbackTimer = window.setTimeout(cleanup, 450);
+
+  // Force the browser to commit the starting state before transitioning.
+  void ghost.offsetWidth;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      ghost.style.transform = `translate(-50%, -50%) translate(${to.x - from.x}px, ${to.y - from.y}px) scale(0.96)`;
+      ghost.style.opacity = "0.08";
+    });
+  });
+}
+
+function findVisibleCardElementInRight(cardId) {
+  const rightList = document.getElementById("card-list");
+  if (!rightList) return null;
+  const card = findCardById(cardId);
+  if (!card) return null;
+  return Array.from(rightList.querySelectorAll(".card-item")).find(el => (el.textContent || "").trim() === String(card.略称 || "")) || null;
+}
+
+function findVisibleCardElementInDeck(cardId) {
+  const deckList = document.getElementById("deck-list");
+  if (!deckList) return null;
+  const card = findCardById(cardId);
+  if (!card) return null;
+  return Array.from(deckList.querySelectorAll(".card-item")).find(el => {
+    const t = (el.textContent || "").trim();
+    return t === String(card.名前 || "") || t.startsWith(String(card.名前 || ""));
+  }) || null;
+}
+
+
+export function renderCardList(resetPage = true) {
   // 若從 Event (如 onchange) 呼叫，resetPage 會是 Event 物件 (truthy) -> 重置頁面。
   // 若要保留當前頁面，請明確傳入 false。
   if (resetPage === true || (typeof resetPage === 'object' && resetPage !== null)) {
@@ -161,8 +776,10 @@ function renderCardList(resetPage = true) {
       el.classList.add('selected');
       renderDeck();
     };
-    el.ondblclick = () => {
-      addToCurrentDeck(card.id);
+    el.ondblclick = () => addToCurrentDeck(card.id, { animate: true, sourceEl: el, sourceZone: "right" });
+    el.oncontextmenu = e => {
+      e.preventDefault();
+      removeFromDeck(card.id, { animate: true });
     };
     container.appendChild(el);
   });
@@ -170,7 +787,9 @@ function renderCardList(resetPage = true) {
   container.scrollTop = 0; // 渲染時固定滾動到頂部
 
   const countEl = document.getElementById("result-count");
-  if (countEl) countEl.textContent = `(${totalItems})`;
+  if (countEl) {
+    countEl.innerHTML = `<span class="count-badge-label">HITS</span><span class="count-badge-value">${totalItems}</span>`;
+  }
 }
 
 function renderPagination(totalPages) {
@@ -201,7 +820,7 @@ function updateItemsPerPage() {
   if (!container || container.clientHeight === 0) return;
 
   // 取得 CSS Grid 的列數 (假設 gap 為 4px)
-  // 簡單判斷：容器寬度 / (大概卡片寬度 + gap) ? 
+  // 簡單判斷：容器寬度 / (大概卡片寬度 + gap) ?
   // 或者直接讀取 computedStyle 的 grid-template-columns
   const style = window.getComputedStyle(container);
   const gridCols = style.gridTemplateColumns.split(" ").length || 3;
@@ -243,14 +862,13 @@ function renderCardInfo() {
   const c = selectedCard;
   if (!c) return;
   updateCardHistory(c);
+  const typeColor = typeColors[c.種類] || "";
 
   const btnFav = document.getElementById("btn-favorite");
   if (btnFav) {
     if (favorites.has(c.id)) {
-      btnFav.textContent = "❤️";
       btnFav.classList.add('active');
     } else {
-      btnFav.textContent = "🤍";
       btnFav.classList.remove('active');
     }
   }
@@ -267,10 +885,11 @@ function renderCardInfo() {
   if (c.チューナー == 1) {
     typeDisplay += " / チューナー";
   }
-  if (c.分割) {
-    typeDisplay += ` / ${c.分割}`;
-  }
   set("card-type", typeDisplay);
+  const nameEl = document.getElementById("card-name");
+  if (nameEl) nameEl.style.color = typeColor || "#fff";
+  const typeEl = document.getElementById("card-type");
+  if (typeEl) typeEl.style.color = typeColor || "";
   set("card-attr", attrIcons[c.属性] || c.属性 || "-"); // Use icons
   set("card-race", c.種族 || ""); // Now separate
   set("card-level", c.レベル || "");
@@ -379,6 +998,7 @@ function renderCardInfo() {
     .replace(/\n/g, "<br>");
   const descEl = document.getElementById("card-desc");
   if (descEl) descEl.innerHTML = descHTML;
+  hideSelectionTagPopup();
 
   // Categories
   const catContainer = document.getElementById("card-categories");
@@ -431,7 +1051,7 @@ function renderDeck() {
     // Show empty state (already in HTML default, but if we clear innerHTML we need to restore it or handle it)
     panel.innerHTML = `
         <div class="empty-placeholder">
-            <div class="icon">💾</div>
+            <div class="icon">🎴</div>
             <div class="text">デッキは空です</div>
             <div class="subtext">SELECT CARDS FROM THE DATABASE.</div>
         </div>
@@ -467,8 +1087,10 @@ function renderDeck() {
       document.querySelectorAll('#deck-list .card-item').forEach(i => i.classList.remove('selected'));
       el.classList.add('selected');
     };
-    el.ondblclick = () => {
-      removeFromDeck(card.id);
+    el.ondblclick = () => addToCurrentDeck(card.id, { animate: true, sourceEl: el, sourceZone: "middle" });
+    el.oncontextmenu = e => {
+      e.preventDefault();
+      removeFromDeck(card.id, { animate: true, sourceEl: el });
     };
 
     if (count > 1) {
@@ -482,6 +1104,7 @@ function renderDeck() {
 
 function applyFiltersAndSearch() {
   const categoryText = document.getElementById("filter-category")?.value.trim();
+  const statFilters = getStatFilters();
 
   // Collect checked filters
   const filters = {
@@ -490,8 +1113,7 @@ function applyFiltersAndSearch() {
     種族: getChecked("filter-種族"),
     レベル: getChecked("filter-レベル"),
     性別: getChecked("filter-性別"),
-    チューナー: getChecked("filter-チューナー"),
-    分割: getChecked("filter-分割")
+    チューナー: getChecked("filter-チューナー")
   };
 
   const search = document.getElementById("search-text")?.value.trim();
@@ -500,6 +1122,9 @@ function applyFiltersAndSearch() {
     for (let key in filters) {
       if (filters[key].length && !filters[key].includes(String(card[key]))) return false;
     }
+
+    if (!cardMatchesStatRange(card.攻撃力, statFilters.atkMin, statFilters.atkMax)) return false;
+    if (!cardMatchesStatRange(card.守備力, statFilters.defMin, statFilters.defMax)) return false;
 
     if (categoryText && !card.categories.some(c => c.includes(categoryText))) return false;
 
@@ -561,7 +1186,7 @@ function applyFiltersAndSearch() {
   return result;
 }
 
-function handleSort(key) {
+export function handleSort(key) {
   if (currentSortKey === key) {
     // Toggle direction
     currentSortDir *= -1;
@@ -603,12 +1228,14 @@ function renderActiveFilters() {
   container.innerHTML = "";
 
   // Check sorted checkboxes
-  document.querySelectorAll(".filter-panel input[type='checkbox']:checked").forEach(cb => {
+  document.querySelectorAll(".filter-panel input[type='checkbox'][class^='filter-']:checked").forEach(cb => {
     const val = cb.value;
     const tag = document.createElement("div");
     tag.className = "filter-tag";
     if (cb.className.includes('filter-チューナー')) {
       tag.textContent = `チューナー: ${val === '1' ? '是' : '否'}`;
+    } else if (cb.className.includes('filter-レベル')) {
+      tag.textContent = `レベル: ${val}`;
     } else {
       tag.textContent = val;
     }
@@ -632,6 +1259,31 @@ function renderActiveFilters() {
     container.appendChild(tag);
   }
 
+  const statFilters = getStatFilters();
+  if (statFilters.atkMin !== null || statFilters.atkMax !== null) {
+    const tag = document.createElement("div");
+    tag.className = "filter-tag";
+    tag.textContent = formatStatFilterLabel("ATK", statFilters.atkMin, statFilters.atkMax);
+    tag.onclick = () => {
+      setNumericFilterValue("filter-atk-min", "");
+      setNumericFilterValue("filter-atk-max", "");
+      renderCardList();
+    };
+    container.appendChild(tag);
+  }
+
+  if (statFilters.defMin !== null || statFilters.defMax !== null) {
+    const tag = document.createElement("div");
+    tag.className = "filter-tag";
+    tag.textContent = formatStatFilterLabel("DEF", statFilters.defMin, statFilters.defMax);
+    tag.onclick = () => {
+      setNumericFilterValue("filter-def-min", "");
+      setNumericFilterValue("filter-def-max", "");
+      renderCardList();
+    };
+    container.appendChild(tag);
+  }
+
   // Render Search Tags
   searchTags.forEach((term, index) => {
     const tag = document.createElement("div");
@@ -645,7 +1297,7 @@ function renderActiveFilters() {
   });
 }
 
-function toggleHistory() {
+export function toggleHistory() {
   const p = document.getElementById("history-panel");
   if (p) {
     const wasCollapsed = p.classList.contains("collapsed");
@@ -659,6 +1311,7 @@ function toggleHistory() {
     } else {
       p.classList.add("collapsed");
     }
+    syncRightPanelFocusState();
   }
 }
 
@@ -685,6 +1338,15 @@ function updateSearchHistory() {
   if (!document.getElementById("history-panel")?.classList.contains("collapsed")) {
     renderHistoryPanel();
   }
+}
+
+function ensureDefaultSearchHistory() {
+  defaultSearchHistory.forEach(tags => {
+    const exists = searchHistory.some(historyTags => arraysEqual(historyTags, tags));
+    if (!exists) {
+      searchHistory.push([...tags]);
+    }
+  });
 }
 
 function updateCardHistory(card) {
@@ -726,6 +1388,7 @@ function renderHistoryPanel() {
         renderCardList();
         // Close panel after applying for better UX
         document.getElementById("history-panel")?.classList.add("collapsed");
+        syncRightPanelFocusState();
       };
 
       tags.forEach(tagText => {
@@ -779,7 +1442,7 @@ function isSearchMatch(card, term) {
   return target.includes(term);
 }
 
-function handleSearch() {
+export function handleSearch() {
   const input = document.getElementById("search-text");
   const icon = document.getElementById("search-icon-symbol");
   if (input && icon) {
@@ -794,7 +1457,7 @@ function renderFilterPanel() {
   filterDiv.innerHTML = "";
 
   // Define what to filter
-  const filterKeys = ["種類", "属性", "種族", "レベル", "性別", "分割"];
+  const filterKeys = ["種類", "属性", "種族", "レベル", "性別"];
   const filters = {};
   filterKeys.forEach(k => {
     filters[k] = [...new Set(allCards.map(c => c[k]))];
@@ -802,17 +1465,17 @@ function renderFilterPanel() {
 
   for (let key in filters) {
     const group = document.createElement("div");
-    group.style.marginBottom = "0.5rem";
+    group.className = "filter-group";
 
     const title = document.createElement("div");
+    title.className = "filter-group-title";
     title.textContent = key;
-    title.style.color = "#888";
-    title.style.fontSize = "0.9rem";
-    title.style.fontWeight = "bold";
-    title.style.marginBottom = "0.25rm";
-    group.appendChild(title);
+    const content = document.createElement("div");
+    content.className = "filter-group-content";
 
-    // Grid of checkboxes? Or just list.
+    group.appendChild(title);
+    group.appendChild(content);
+
     if (key === "種類") {
       const trapTypes = ["通常罠", "永続罠", "カウンター罠"];
       const spellTypes = ["通常魔法", "永続魔法", "装備魔法", "儀式魔法", "フィールド", "速攻魔法"];
@@ -823,41 +1486,39 @@ function renderFilterPanel() {
       const typeGroups = [trapTypes, spellTypes, otherTypes];
 
       typeGroups.forEach((groupTypes, groupIndex) => {
+        if (!groupTypes.length) return;
+
         const groupContainer = document.createElement("div");
-        groupContainer.style.display = "flex";
-        groupContainer.style.alignItems = "start";
-        groupContainer.style.marginBottom = "4px";
+        groupContainer.className = "filter-subgroup";
 
-        // Add "All/None" checkbox
-        const allNoneLabel = document.createElement("label");
-        allNoneLabel.style.display = "flex";
-        allNoneLabel.style.marginRight = '8px';
-        allNoneLabel.style.alignItems = "center";
-        allNoneLabel.style.fontSize = "0.9rem";
-        allNoneLabel.style.cursor = "pointer";
-        allNoneLabel.style.whiteSpace = "nowrap";
+        let selectAllLabelText = "";
+        if (groupIndex === 0) selectAllLabelText = "罠全選";
+        else if (groupIndex === 1) selectAllLabelText = "魔法全選";
 
-        const allNoneCheckbox = document.createElement("input");
-        allNoneCheckbox.type = "checkbox";
-        allNoneCheckbox.onchange = () => {
-          groupTypes.forEach(type => {
-            const checkbox = document.querySelector(`.filter-${key}[value="${type}"]`);
-            if (checkbox) checkbox.checked = allNoneCheckbox.checked;
-          });
-          renderCardList();
-        };
-        allNoneLabel.appendChild(allNoneCheckbox);
+        if (selectAllLabelText) {
+          const allNoneLabel = document.createElement("label");
+          allNoneLabel.className = "filter-card filter-card-select-all";
 
-        if (groupIndex === 0) allNoneLabel.append(" 罠全般");
-        else if (groupIndex === 1) allNoneLabel.append(" 魔法全般");
-        else allNoneLabel.style.display = 'none';
+          const allNoneCheckbox = document.createElement("input");
+          allNoneCheckbox.type = "checkbox";
+          allNoneCheckbox.onchange = () => {
+            groupTypes.forEach(type => {
+              const checkbox = document.querySelector(`.filter-${key}[value="${type}"]`);
+              if (checkbox) checkbox.checked = allNoneCheckbox.checked;
+            });
+            renderCardList();
+          };
 
-        groupContainer.appendChild(allNoneLabel);
+          const text = document.createElement("span");
+          text.textContent = selectAllLabelText;
+
+          allNoneLabel.appendChild(allNoneCheckbox);
+          allNoneLabel.appendChild(text);
+          groupContainer.appendChild(allNoneLabel);
+        }
 
         const checkboxContainer = document.createElement("div");
-        checkboxContainer.style.display = "flex";
-        checkboxContainer.style.flexWrap = "wrap";
-        checkboxContainer.style.gap = "0.2rem";
+        checkboxContainer.className = "filter-card-grid";
 
         groupTypes.forEach(val => {
           const label = createFilterCheckbox(key, val);
@@ -865,68 +1526,127 @@ function renderFilterPanel() {
         });
 
         groupContainer.appendChild(checkboxContainer);
-        group.appendChild(groupContainer);
+        content.appendChild(groupContainer);
       });
     } else {
       const container = document.createElement("div");
-      container.style.display = "flex";
-      container.style.flexWrap = "wrap";
-      container.style.gap = "0.5rem";
+      container.className = "filter-card-grid";
 
       filters[key]
         .filter(x => x !== null && x !== undefined)
         .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b), 'ja'))
         .forEach(val => { if (val) { const label = createFilterCheckbox(key, val); container.appendChild(label); } });
 
-      group.appendChild(container);
+      content.appendChild(container);
     }
     filterDiv.appendChild(group);
   }
 
   // Manually add Tuner filter group
   const tunerGroup = document.createElement("div");
-  tunerGroup.style.marginBottom = "0.5rem";
+  tunerGroup.className = "filter-group";
 
   const tunerTitle = document.createElement("div");
+  tunerTitle.className = "filter-group-title";
   tunerTitle.textContent = "チューナー";
-  tunerTitle.style.color = "#888";
-  tunerTitle.style.fontSize = "0.9rem";
-  tunerTitle.style.fontWeight = "bold";
-  tunerTitle.style.marginBottom = "0.25rem";
   tunerGroup.appendChild(tunerTitle);
 
+  const tunerContent = document.createElement("div");
+  tunerContent.className = "filter-group-content";
+
   const tunerContainer = document.createElement("div");
-  tunerContainer.style.display = "flex";
-  tunerContainer.style.flexWrap = "wrap";
-  tunerContainer.style.gap = "0.5rem";
+  tunerContainer.className = "filter-card-grid";
 
   [{ label: '是', value: '1' }, { label: '否', value: '0' }].forEach(opt => {
-    const label = document.createElement("label");
-    label.style.display = "flex";
-    label.style.alignItems = "center";
-    label.style.fontSize = "0.9rem";
-    label.style.cursor = "pointer";
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.value = opt.value;
-    cb.className = `filter-チューナー`;
-    cb.onchange = renderCardList;
-
-    label.appendChild(cb);
-    label.append(` ${opt.label}`);
+    const label = createFilterCheckbox("チューナー", opt.value, opt.label);
     tunerContainer.appendChild(label);
   });
-  tunerGroup.appendChild(tunerContainer);
+  tunerContent.appendChild(tunerContainer);
+  tunerGroup.appendChild(tunerContent);
   filterDiv.appendChild(tunerGroup);
+
+  const categoryGroup = document.createElement("div");
+  categoryGroup.className = "filter-group filter-group-field";
+
+  const categoryTitle = document.createElement("div");
+  categoryTitle.className = "filter-group-title";
+  categoryTitle.textContent = "Category";
+
+  const categoryContent = document.createElement("div");
+  categoryContent.className = "filter-group-content";
+
+  const categoryRow = document.createElement("div");
+  categoryRow.className = "filter-field-row";
+
+  const categoryInput = document.createElement("input");
+  categoryInput.type = "text";
+  categoryInput.id = "filter-category";
+  categoryInput.placeholder = "Category...";
+  categoryInput.className = "filter-text-input";
+  categoryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      renderCardList();
+    }
+  });
+  categoryInput.addEventListener("input", renderCardList);
+
+  categoryRow.appendChild(categoryInput);
+  categoryContent.appendChild(categoryRow);
+  categoryGroup.appendChild(categoryTitle);
+  categoryGroup.appendChild(categoryContent);
+  filterDiv.appendChild(categoryGroup);
+
+  const statConfigs = [
+    { key: "atk", label: "攻撃力" },
+    { key: "def", label: "守備力" }
+  ];
+
+  statConfigs.forEach(({ key, label }) => {
+    const group = document.createElement("div");
+    group.className = "filter-group filter-group-field";
+
+    const title = document.createElement("div");
+    title.className = "filter-group-title";
+    title.textContent = label;
+
+    const content = document.createElement("div");
+    content.className = "filter-group-content";
+
+    const row = document.createElement("div");
+    row.className = "filter-range-row";
+
+    const minInput = document.createElement("input");
+    minInput.type = "number";
+    minInput.id = `filter-${key}-min`;
+    minInput.placeholder = "Min";
+    minInput.className = "filter-range-input";
+    minInput.addEventListener("input", renderCardList);
+
+    const sep = document.createElement("span");
+    sep.className = "filter-range-separator";
+    sep.textContent = "~";
+
+    const maxInput = document.createElement("input");
+    maxInput.type = "number";
+    maxInput.id = `filter-${key}-max`;
+    maxInput.placeholder = "Max";
+    maxInput.className = "filter-range-input";
+    maxInput.addEventListener("input", renderCardList);
+
+    row.appendChild(minInput);
+    row.appendChild(sep);
+    row.appendChild(maxInput);
+    content.appendChild(row);
+    group.appendChild(title);
+    group.appendChild(content);
+    filterDiv.appendChild(group);
+  });
 }
 
-function createFilterCheckbox(key, val) {
+function createFilterCheckbox(key, val, labelText = val) {
   const label = document.createElement("label");
-  label.style.display = "flex";
-  label.style.alignItems = "center";
-  label.style.fontSize = "0.9rem";
-  label.style.cursor = "pointer";
+  label.className = "filter-card";
 
   const cb = document.createElement("input");
   cb.type = "checkbox";
@@ -934,8 +1654,11 @@ function createFilterCheckbox(key, val) {
   cb.className = `filter-${key}`;
   cb.onchange = renderCardList;
 
+  const text = document.createElement("span");
+  text.textContent = labelText;
+
   label.appendChild(cb);
-  label.append(` ${val}`);
+  label.appendChild(text);
   return label;
 }
 
@@ -948,34 +1671,66 @@ function getChecked(cls) {
   return [...document.querySelectorAll(`.${cls}:checked`)].map(cb => cb.value);
 }
 
-function toggleFilter() {
+function isRightOverlayOpen() {
+  return ["filter-panel", "sort-panel", "history-panel"].some(id => {
+    const panel = document.getElementById(id);
+    return panel && !panel.classList.contains("collapsed");
+  });
+}
+
+function syncRightPanelFocusState() {
+  const rightPanel = document.querySelector(".panel.right");
+  if (!rightPanel) return;
+  rightPanel.classList.toggle("overlay-active", isRightOverlayOpen());
+}
+
+export function openHelpModal() {
+  const modal = document.getElementById("help-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+export function closeHelpModal() {
+  const modal = document.getElementById("help-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+export function toggleFilter() {
   const p = document.getElementById("filter-panel");
   if (p) {
     p.classList.toggle("collapsed");
     // Close sort if open
     document.getElementById("sort-panel")?.classList.add("collapsed");
     document.getElementById("history-panel")?.classList.add("collapsed");
+    syncRightPanelFocusState();
   }
 }
 
-function toggleSort() {
+export function toggleSort() {
   const p = document.getElementById("sort-panel");
   if (p) {
     p.classList.toggle("collapsed");
     // Close filter if open
     document.getElementById("filter-panel")?.classList.add("collapsed");
     document.getElementById("history-panel")?.classList.add("collapsed");
+    syncRightPanelFocusState();
   }
 }
 
-function resetFilters() {
+export function resetFilters() {
   document.querySelectorAll(".filter-panel input[type='checkbox']").forEach(cb => cb.checked = false);
   const cat = document.getElementById("filter-category");
   if (cat) cat.value = "";
+  clearNumericFilters();
   renderCardList();
 }
 
-function resetSearch() {
+export function resetSearch() {
   const s = document.getElementById("search-text");
   if (s) s.value = "";
   const icon = document.getElementById("search-icon-symbol");
@@ -984,7 +1739,7 @@ function resetSearch() {
   renderCardList();
 }
 
-function switchDeckTab(tab) {
+export function switchDeckTab(tab) {
   currentDeckTab = tab;
 
   // Toggle active class
@@ -1014,10 +1769,23 @@ function canAddToCurrentDeck(card) {
   return true;
 }
 
-function addToCurrentDeck(cardId) {
+export function addToCurrentDeck(cardId, options = {}) {
   if (!cardId) return;
-  const card = allCards.find(c => c.id === cardId);
+  const card = findCardById(cardId);
   if (card && canAddToCurrentDeck(card)) {
+    if (options.animate) {
+      const target = getContainerCenter("#deck-list");
+      const visibleRightCard = findVisibleCardElementInRight(cardId);
+      let from = null;
+      if (visibleRightCard) {
+        from = getElementCenter(visibleRightCard);
+      } else if (options.sourceZone === "right" && options.sourceEl) {
+        from = getElementCenter(options.sourceEl);
+      } else {
+        from = getContainerCenter("#card-list");
+      }
+      createFlyingCard(card.略称 || card.名前, from, target);
+    }
     currentDeckList().push(card);
     renderDeck();
   } else {
@@ -1026,17 +1794,24 @@ function addToCurrentDeck(cardId) {
   }
 }
 
-function removeFromDeck(cardId) {
+export function removeFromDeck(cardId, options = {}) {
   if (!cardId) return;
   const list = currentDeckList();
   const idx = list.findIndex(c => c.id === cardId);
   if (idx !== -1) {
+    const card = list[idx];
+    if (options.animate) {
+      const deckCardEl = options.sourceEl || findVisibleCardElementInDeck(cardId);
+      const from = deckCardEl ? getElementCenter(deckCardEl) : getContainerCenter("#deck-list");
+      const to = getContainerCenter("#card-list");
+      createFlyingCard(card.略称 || card.名前, from, to);
+    }
     list.splice(idx, 1);
     renderDeck();
   }
 }
 
-function clearCurrentDeck() {
+export function clearCurrentDeck() {
   if (confirm("Are you sure you want to clear the current deck?")) {
     const list = currentDeckList();
     list.length = 0;
@@ -1044,7 +1819,7 @@ function clearCurrentDeck() {
   }
 }
 
-function autoGenerateStub() {
+export function autoGenerateStub() {
   alert("This feature is under development.");
 }
 
@@ -1061,10 +1836,10 @@ function handleDeckDragStart(event, cardId) {
     source: "mid"
   }));
 }
-function allowDrop(event) {
+export function allowDrop(event) {
   event.preventDefault();
 }
-function handleDrop(event) {
+export function handleDrop(event) {
   event.preventDefault();
   // Find drop target
   // Simplified: if drop on .panel.middle or .deck-content-area -> Add
@@ -1095,7 +1870,7 @@ function handleDrop(event) {
 }
 
 // Import/Export
-function exportDeck() {
+export function exportDeck() {
   const lines = [];
   const mainDeckLimit = 60;
   const extraDeckLimit = 15;
@@ -1130,7 +1905,7 @@ function exportDeck() {
   URL.revokeObjectURL(url);
 }
 
-function importDeck() {
+export function importDeck() {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".txt";
@@ -1183,6 +1958,14 @@ document.addEventListener("mousedown", (event) => {
       historyPanel.classList.add("collapsed");
     }
   }
+
+  syncRightPanelFocusState();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeHelpModal();
+  }
 });
 
 // Bind Sort Radio Changes to Render
@@ -1190,6 +1973,38 @@ document.addEventListener("mousedown", (event) => {
 
 // Add Enter listener for search
 document.addEventListener("DOMContentLoaded", () => {
+  const isEditableTarget = (el) => {
+    if (!el) return false;
+    const tag = (el.tagName || "").toUpperCase();
+    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+  };
+
+  const blockContextMenuAndDoubleSelect = (selector) => {
+    const panel = document.querySelector(selector);
+    if (!panel) return;
+
+    const allowSelection = (target) => target?.closest?.("#card-desc");
+
+    panel.addEventListener("contextmenu", (e) => {
+      if (allowSelection(e.target)) return;
+      e.preventDefault();
+    });
+
+    panel.addEventListener("dblclick", (e) => {
+      if (allowSelection(e.target)) return;
+      if (!isEditableTarget(e.target)) e.preventDefault();
+    });
+
+    panel.addEventListener("selectstart", (e) => {
+      if (allowSelection(e.target)) return;
+      if (!isEditableTarget(e.target)) e.preventDefault();
+    });
+  };
+
+  blockContextMenuAndDoubleSelect(".panel.middle");
+  blockContextMenuAndDoubleSelect(".panel.right");
+  setupDescriptionSelectionTagging();
+
   const searchInput = document.getElementById("search-text");
   if (searchInput) {
     searchInput.addEventListener("keydown", (e) => {
@@ -1203,16 +2018,6 @@ document.addEventListener("DOMContentLoaded", () => {
           if (icon) icon.textContent = "🔍";
           renderCardList(); // Update
         }
-      }
-    });
-  }
-
-  const filterCat = document.getElementById("filter-category");
-  if (filterCat) {
-    filterCat.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        renderCardList();
       }
     });
   }
@@ -1247,7 +2052,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-function toggleFavorite(id) {
+export function toggleFavorite(id) {
   if (favorites.has(id)) {
     favorites.delete(id);
   } else {
@@ -1259,25 +2064,25 @@ function toggleFavorite(id) {
   // Re-render card info to update heart icon immediately
   renderCardInfo();
 
-  // If the filter is currently active, re-render the list
-  if (showFavoritesOnly) {
-    renderCardList();
-  }
+  renderCardList(false);
 }
 
-function toggleFavoriteFilter() {
+export function toggleFavoriteFilter() {
   showFavoritesOnly = !showFavoritesOnly;
 
   const btn = document.getElementById("favorite-filter-toggle");
   if (btn) {
     if (showFavoritesOnly) {
-      btn.textContent = "❤️";
       btn.classList.add("active");
     } else {
-      btn.textContent = "🤍";
       btn.classList.remove("active");
     }
   }
 
   renderCardList();
 }
+
+export function getSelectedCard() {
+  return selectedCard;
+}
+
