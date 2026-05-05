@@ -164,6 +164,11 @@ function hideSelectionTagPopup() {
   selectionTagPopup.classList.add("hidden");
 }
 
+function clearDescriptionSelection() {
+  const selection = window.getSelection();
+  if (selection) selection.removeAllRanges();
+}
+
 function getNumericFilterValue(id) {
   const input = document.getElementById(id);
   if (!input) return null;
@@ -559,8 +564,7 @@ function applySelectionTagPayloadInternal(payload, options = {}) {
     renderCardList();
     if (!preservePopup) {
       hideSelectionTagPopup();
-      const selection = window.getSelection();
-      if (selection) selection.removeAllRanges();
+      clearDescriptionSelection();
     }
     return;
   }
@@ -599,8 +603,7 @@ function applySelectionTagPayloadInternal(payload, options = {}) {
   renderCardList();
   if (!preservePopup) {
     hideSelectionTagPopup();
-    const selection = window.getSelection();
-    if (selection) selection.removeAllRanges();
+    clearDescriptionSelection();
   }
 }
 
@@ -656,9 +659,8 @@ function setupDescriptionSelectionTagging() {
 
   document.addEventListener("mousedown", (event) => {
     if (selectionTagPopup?.contains(event.target)) return;
-    const descEl = document.getElementById("card-desc");
-    if (descEl?.contains(event.target)) return;
     hideSelectionTagPopup();
+    clearDescriptionSelection();
   });
 }
 
@@ -1492,8 +1494,8 @@ function renderFilterPanel() {
         groupContainer.className = "filter-subgroup";
 
         let selectAllLabelText = "";
-        if (groupIndex === 0) selectAllLabelText = "罠全選";
-        else if (groupIndex === 1) selectAllLabelText = "魔法全選";
+        if (groupIndex === 0) selectAllLabelText = "罠全般";
+        else if (groupIndex === 1) selectAllLabelText = "魔法全般";
 
         if (selectAllLabelText) {
           const allNoneLabel = document.createElement("label");
