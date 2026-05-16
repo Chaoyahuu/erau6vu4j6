@@ -658,7 +658,10 @@ function setupDescriptionSelectionTagging() {
   window.addEventListener("resize", hideSelectionTagPopup);
 
   document.addEventListener("mousedown", (event) => {
+    const descEl = document.getElementById("card-desc");
+    if (event.button !== 0) return;
     if (selectionTagPopup?.contains(event.target)) return;
+    if (descEl?.contains(event.target)) return;
     hideSelectionTagPopup();
     clearDescriptionSelection();
   });
@@ -701,6 +704,12 @@ function createFlyingCard(label, from, to) {
       ghost.style.opacity = "0.08";
     });
   });
+}
+
+function findCardElementById(containerSelector, cardId) {
+  const container = document.querySelector(containerSelector);
+  if (!container) return null;
+  return container.querySelector(`.card-item[data-card-id="${String(cardId)}"]`);
 }
 
 function findVisibleCardElementInRight(cardId) {
@@ -755,14 +764,61 @@ export function renderCardList(resetPage = true) {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
   const pageCards = filtered.slice(startIndex, endIndex);
+  const deckCounts = currentDeckList().reduce((counts, deckCard) => {
+    counts.set(deckCard.id, (counts.get(deckCard.id) || 0) + 1);
+    return counts;
+  }, new Map());
+  const activeSearchTerms = [
+    document.getElementById("search-text")?.value.trim(),
+    ...searchTags,
+  ].filter(Boolean);
 
   renderPagination(totalPages);
 
   pageCards.forEach(card => {
     const el = document.createElement("div");
     el.className = "card-item";
+    el.dataset.cardId = String(card.id);
     el.draggable = true;
-    el.textContent = card.略称; // Short name
+    const isExactNameMatch = isExactOriginalNameMatch(card, activeSearchTerms);
+    const aliasTreatmentNames = getAliasTreatmentNames(card);
+    const hasAliasTreatment = isAliasTreatmentMatch(card, activeSearchTerms);
+    if (isExactNameMatch) el.classList.add("exact-name-match");
+
+    const badges = document.createElement("div");
+    badges.className = "card-item-badges";
+    if (isExactNameMatch) {
+      const badge = document.createElement("span");
+      badge.className = "card-item-badge card-item-badge-gold";
+      badge.textContent = "\u2605";
+      badge.title = card.名前 || "";
+      badges.appendChild(badge);
+    }
+    if (hasAliasTreatment) {
+      const badge = document.createElement("span");
+      badge.className = "card-item-badge card-item-badge-silver";
+      badge.textContent = "\u2605";
+      badge.title = aliasTreatmentNames.join(" / ");
+      badges.appendChild(badge);
+    }
+    el.appendChild(badges);
+
+    const body = document.createElement("div");
+    body.className = "card-item-body";
+
+    const main = document.createElement("div");
+    main.className = "card-item-main";
+    main.textContent = card.略称 || "";
+    body.appendChild(main);
+
+    el.appendChild(body);
+    const deckCount = deckCounts.get(card.id) || 0;
+    if (deckCount > 0) {
+      const countBadge = document.createElement("span");
+      countBadge.className = "card-count-badge";
+      countBadge.textContent = `x${deckCount}`;
+      el.appendChild(countBadge);
+    }
     // Color border or text based on type? Original: style.color. 
     // New design: card-item has border. Let's use border color or a small pip.
     el.style.borderLeft = `0.3rem solid ${typeColors[card.種類] || "#555"}`;
@@ -1074,6 +1130,7 @@ function renderDeck() {
   grouped.forEach(({ card, count }) => {
     const el = document.createElement("div");
     el.className = "card-item";
+    el.dataset.cardId = String(card.id);
     el.draggable = true;
     el.textContent = card.名前;
     el.style.borderLeft = `0.3rem solid ${typeColors[card.種類] || "#fff"}`;
@@ -1097,6 +1154,7 @@ function renderDeck() {
 
     if (count > 1) {
       const badge = document.createElement("span");
+      badge.className = "card-count-badge";
       badge.textContent = `x${count}`;
       el.appendChild(badge);
     }
@@ -1430,6 +1488,32 @@ function arraysEqual(a, b) {
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+function normalizeSearchTerm(term) {
+  return String(term || "").normalize("NFKC").trim().toLowerCase();
+}
+
+function isExactOriginalNameMatch(card, terms = []) {
+  const originalName = normalizeSearchTerm(card?.名前);
+  const shortName = normalizeSearchTerm(card?.略称);
+  if (!originalName && !shortName) return false;
+  return terms.some(term => {
+    const normalizedTerm = normalizeSearchTerm(term);
+    return normalizedTerm === originalName || normalizedTerm === shortName;
+  });
+}
+
+function getAliasTreatmentNames(card) {
+  const description = String(card?.説明 || "");
+  const matches = [...description.matchAll(/「([^」]+)」としても扱う/g)];
+  return matches.map(match => normalizeSearchTerm(match[1])).filter(Boolean);
+}
+
+function isAliasTreatmentMatch(card, terms = []) {
+  const aliasNames = getAliasTreatmentNames(card);
+  if (!aliasNames.length) return false;
+  return terms.some(term => aliasNames.includes(normalizeSearchTerm(term)));
 }
 
 // Helper for search matching
@@ -1777,7 +1861,7 @@ export function addToCurrentDeck(cardId, options = {}) {
   if (card && canAddToCurrentDeck(card)) {
     if (options.animate) {
       const target = getContainerCenter("#deck-list");
-      const visibleRightCard = findVisibleCardElementInRight(cardId);
+      const visibleRightCard = findCardElementById("#card-list", cardId) || findVisibleCardElementInRight(cardId);
       let from = null;
       if (visibleRightCard) {
         from = getElementCenter(visibleRightCard);
@@ -1790,6 +1874,7 @@ export function addToCurrentDeck(cardId, options = {}) {
     }
     currentDeckList().push(card);
     renderDeck();
+    renderCardList(false);
   } else {
     // Optional: Visual feedback for failure
     console.log('Cannot add card');
@@ -1803,13 +1888,16 @@ export function removeFromDeck(cardId, options = {}) {
   if (idx !== -1) {
     const card = list[idx];
     if (options.animate) {
-      const deckCardEl = options.sourceEl || findVisibleCardElementInDeck(cardId);
+      const deckCardEl = options.sourceEl || findCardElementById("#deck-list", cardId) || findVisibleCardElementInDeck(cardId);
       const from = deckCardEl ? getElementCenter(deckCardEl) : getContainerCenter("#deck-list");
-      const to = getContainerCenter("#card-list");
+      const to = options.targetEl
+        ? getElementCenter(options.targetEl)
+        : getContainerCenter(options.targetSelector || "#card-list");
       createFlyingCard(card.略称 || card.名前, from, to);
     }
     list.splice(idx, 1);
     renderDeck();
+    renderCardList(false);
   }
 }
 
@@ -1818,6 +1906,7 @@ export function clearCurrentDeck() {
     const list = currentDeckList();
     list.length = 0;
     renderDeck();
+    renderCardList(false);
   }
 }
 

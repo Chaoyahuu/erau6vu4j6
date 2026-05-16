@@ -40,11 +40,18 @@ function bindClick(id, handler) {
 function bindUiEvents() {
   document.body.addEventListener("dragover", allowDrop);
   document.body.addEventListener("drop", handleDrop);
+  const leftDetails = document.querySelector(".panel.left .card-details-container");
 
   bindClick("help-trigger", openHelpModal);
   bindClick("btn-favorite", () => withSelectedCard(card => toggleFavorite(card.id)));
-  bindClick("btn-add", () => withSelectedCard(card => addToCurrentDeck(card.id)));
-  bindClick("btn-remove", () => withSelectedCard(card => removeFromDeck(card.id)));
+  bindClick("btn-add", () => withSelectedCard(card => addToCurrentDeck(card.id, {
+    animate: true,
+    sourceEl: leftDetails,
+  })));
+  bindClick("btn-remove", () => withSelectedCard(card => removeFromDeck(card.id, {
+    animate: true,
+    targetSelector: "#card-list",
+  })));
   bindClick("btn-clear", clearCurrentDeck);
   bindClick("btn-save", exportDeck);
   bindClick("btn-load", importDeck);
