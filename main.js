@@ -48,15 +48,31 @@ try {
 
 export async function init() {
   const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
-  const response = await fetch("cards.db");
+  const metadata = await loadDbMetadata();
+  const response = await fetch(metadata.db_file);
   const buffer = await response.arrayBuffer();
   db = new SQL.Database(new Uint8Array(buffer));
-  loadDbVersion();
+  loadDbVersion(metadata);
   loadCards();
   // renderSearchHistory(); // If we implement history UI
 }
 
-function loadDbVersion() {
+async function loadDbMetadata() {
+  const response = await fetch("metadata.json", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load metadata.json: ${response.status}`);
+  }
+  const metadata = await response.json();
+  if (!metadata.db_file && metadata.version) {
+    metadata.db_file = `cards_${metadata.version}.db`;
+  }
+  if (!metadata.db_file) {
+    throw new Error("metadata.json must include db_file or version");
+  }
+  return metadata;
+}
+
+function loadDbVersion(metadata = {}) {
   try {
     const res = db.exec("SELECT value FROM metadata WHERE key = 'version'");
     if (res.length > 0 && res[0].values.length > 0) {
@@ -67,7 +83,7 @@ function loadDbVersion() {
   } catch (e) {
     console.log("Metadata version not found", e);
     const el = document.querySelector(".status-badge");
-    if (el) el.textContent = "≡ DB: ONLINE";
+    if (el) el.textContent = metadata.version ? `≡ DB: v${metadata.version}` : "≡ DB: ONLINE";
   }
 }
 
@@ -2176,4 +2192,3 @@ export function toggleFavoriteFilter() {
 export function getSelectedCard() {
   return selectedCard;
 }
-
